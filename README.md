@@ -9,7 +9,7 @@
 > 대용량 트래픽 처리를 위한 마이크로 배치 아키텍처 적용
 
 ## 💡 프로젝트 소개
-오프라인 매장에 설치된 카메라(Device)를 통해 수집된 AI 비전 데이터를 처리하고, 광고 캠페인별 시청자의 몰입도(Attention)와 체류 시간(Dwell Time)을 분석하여 통계를 제공하는 백엔드 시스템입니다.
+오프라인 설치된 카메라(Device)를 통해 수집된 AI 비전 데이터를 처리하고, 광고 캠페인별 시청자의 몰입도(Attention)와 체류 시간(Dwell Time)을 분석하여 통계를 제공하는 백엔드 시스템입니다.
 
 ## 🏗️ 시스템 아키텍처 (System Architecture)
 - **Multi-Repo 연동:** AI Vision (Data Source) -> Backend (API/DB) -> Frontend (Dashboard)
