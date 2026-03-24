@@ -2,6 +2,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base  # Base는 models.py에 있음
 import database
+from dotenv import load_dotenv
+import os
+
+# .env 파일 로드
+load_dotenv()
+
+# 환경변수에서 DB 접속 정보 읽기
+DB_USER     = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST     = os.getenv("DB_HOST", "localhost")
+DB_PORT     = os.getenv("DB_PORT", "5432")
+DB_NAME     = os.getenv("DB_NAME")
 
 # PostgreSQL 연결 주소
 # postgresql://계정명:비밀번호@주소:포트/DB이름
