@@ -1,11 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base  # Base는 models.py에 있음
-import database
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
-# .env 파일 로드
+#dotenv
 load_dotenv()
 
 # 환경변수에서 DB 접속 정보 읽기
@@ -15,9 +14,7 @@ DB_HOST     = os.getenv("DB_HOST", "localhost")
 DB_PORT     = os.getenv("DB_PORT", "5432")
 DB_NAME     = os.getenv("DB_NAME")
 
-# PostgreSQL 연결 주소
-# postgresql://계정명:비밀번호@주소:포트/DB이름
-DB_URL = "postgresql://admin01:admin01@localhost/OAAS_DB"
+DB_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # create_engine()의 괄호 안 = PostgreSQL 연결 주소
 engine = create_engine(DB_URL)
