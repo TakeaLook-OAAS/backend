@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from api.v1.endpoints import events
 from database import create_tables, get_db
 
@@ -23,7 +24,7 @@ def read_root():
 
 
 @app.get("/health", tags=["health"])
-def health_check():
+def health_check(db: Session = Depends(get_db)):
     """
     상세 헬스체크 API — AI 기기에서 서버 상태를 확인할 때 사용합니다.
     - DB 연결 상태까지 포함해 반환합니다.
@@ -32,7 +33,6 @@ def health_check():
     db_ok = False
     # DB 연결 확인 — 간단한 쿼리로 연결 상태 점검
     try:
-        db = next(get_db())
         db.execute(text("SELECT 1"))
         db_ok = True
     except Exception:

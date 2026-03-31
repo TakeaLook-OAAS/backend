@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import timedelta, datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from database import get_db
@@ -95,9 +95,11 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
     campaign_id = device_campaign.campaign_id
 
     # ⑤ 배치 기준 시각 추출 및 지연 감지
-    ts  = event_in.segment.timestamp
+    ts_raw = event_in.segment.timestamp
+    # naive datetime이면 UTC로 고정 (DB 세션 타임존 의존 방지)
+    ts = ts_raw.replace(tzinfo=timezone.utc) if ts_raw.tzinfo is None else ts_raw
     now = datetime.now(timezone.utc)
-    diff = now - (ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts)
+    diff = now - ts
     if diff > timedelta(minutes=BATCH_INTERVAL_MINUTES):
         logger.warning(
             "배치 지연 감지 | ts=%s | ingested_at≈%s | 지연=%s", ts, now, diff
@@ -139,16 +141,20 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
         db.add(segment_log)
         db.add_all(rows)
         db.commit()
-    except IntegrityError:
-        # UniqueConstraint(device_id, track_id, ts) 위반 — 중복 배치 재전송으로 판단
+    except IntegrityError as e:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="이미 저장된 이벤트가 포함되어 있습니다 (device_id + track_id + ts 중복).",
-        )
+        # 중복 제약(uq_event_raw_track)만 409로 분류, 나머지는 500
+        if "uq_event_raw_track" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="이미 저장된 이벤트가 포함되어 있습니다 (device_id + track_id + ts 중복).",
+            )
+        logger.error("DB 저장 중 무결성 오류: %s", e.orig)
+        raise HTTPException(status_code=500, detail="DB 저장 중 오류가 발생했습니다.")
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"DB 저장 실패: {e}")
+        logger.error("DB 저장 실패: %s", e)
+        raise HTTPException(status_code=500, detail="DB 저장 중 오류가 발생했습니다.")
 
     return schemas.EventBatchResponse(inserted=len(rows))
 
@@ -164,7 +170,7 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
 def list_events(
     device_id:   uuid.UUID | None = None,   # 특정 기기 데이터만 조회
     campaign_id: uuid.UUID | None = None,   # 특정 캠페인 데이터만 조회
-    limit:       int = 100,                 # 최대 반환 행 수 (기본 100)
+    limit:       int = Query(default=100, ge=1, le=1000),  # 최대 반환 행 수 (1~1000)
     db: Session = Depends(get_db),
 ):
     """
