@@ -12,3 +12,7 @@ __pycache__/
 
 #env
 .env
+
+#로컬 테스트
+test_local.py
+test_oaas.db
