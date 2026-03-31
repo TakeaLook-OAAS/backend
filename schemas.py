@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
+import uuid
 
 
 # ── AI팀 JSON 내부 구조 ──────────────────────────────────────────────────────
@@ -82,5 +83,31 @@ class EventBatchCreate(BaseModel):
 # ── 응답용 ────────────────────────────────────────────────────────────────────
 
 class EventBatchResponse(BaseModel):
+    """배치 수신 결과 응답"""
     inserted: int = Field(..., description="저장된 track 행 수")
     status:   str = "success"
+
+
+class EventRawOut(BaseModel):
+    """events_raw 단일 행 응답 (GET 조회용)"""
+    model_config = ConfigDict(from_attributes=True)  # ORM 객체 → Pydantic 변환 허용
+
+    id:                    uuid.UUID
+    ts:                    datetime
+    ingested_at:           datetime
+    device_id:             uuid.UUID
+    campaign_id:           uuid.UUID
+    track_id:              int
+    exposure_start_ms:     int
+    exposure_end_ms:       int
+    exposure_ms:           int
+    look_times:            Any           # JSONB 원본 그대로 반환
+    total_look_duration_ms: int
+    age_group:             Optional[str]
+    gender:                Optional[str]
+
+
+class EventListResponse(BaseModel):
+    """이벤트 목록 조회 응답"""
+    events: List[EventRawOut]
+    total:  int              = Field(..., description="반환된 이벤트 수")
