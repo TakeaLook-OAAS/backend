@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from models import EventRaw, DailyAgg, HourlyAgg
+from models import EventRaw, DailyAgg, HourlyAgg, CampaignAgg
 
 # 이 파일의 로거 생성 — 경고/정보 메시지를 터미널에 출력하는 데 사용
 logger = logging.getLogger(__name__)
@@ -269,6 +269,61 @@ def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None
     logger.info(f"[HourlyAgg] 집계 완료 | date={target_date} | 그룹 수={len(groups)}")
 
 
+def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
+    """
+    캠페인 전체 기간의 events_raw를 campaign_aggs 테이블에 집계합니다.
+
+    집계 기준:
+        - (device_id, campaign_id) 조합별로 그룹핑하여 각각 1행으로 저장
+        - 이미 해당 조합의 집계 데이터가 있으면 UPDATE, 없으면 INSERT
+
+    Args:
+        db: SQLAlchemy 세션
+        campaign_id: 특정 캠페인만 집계. None이면 전체 캠페인 대상.
+    """
+    logger.info(f"[CampaignAgg] 집계 시작 | campaign_id={campaign_id}")
+
+    query = db.query(EventRaw)
+    if campaign_id is not None:
+        query = query.filter(EventRaw.campaign_id == campaign_id)
+
+    rows = query.all()
+
+    if not rows:
+        logger.info(f"[CampaignAgg] 데이터 없음 | campaign_id={campaign_id}")
+        return
+
+    # (device_id, campaign_id) 조합별로 그룹핑
+    groups: dict[tuple, list[EventRaw]] = {}
+    for row in rows:
+        key = (row.device_id, row.campaign_id)
+        groups.setdefault(key, []).append(row)
+
+    for (device_id, camp_id), group_rows in groups.items():
+        counts = _build_agg_counts(group_rows)
+
+        existing = (
+            db.query(CampaignAgg)
+            .filter_by(device_id=device_id, campaign_id=camp_id)
+            .first()
+        )
+
+        if existing:
+            for key, val in counts.items():
+                setattr(existing, key, val)
+            logger.info(f"[CampaignAgg] 업데이트 | device={device_id} | campaign={camp_id}")
+        else:
+            db.add(CampaignAgg(
+                device_id=device_id,
+                campaign_id=camp_id,
+                **counts,
+            ))
+            logger.info(f"[CampaignAgg] 신규 INSERT | device={device_id} | campaign={camp_id}")
+
+    db.commit()
+    logger.info(f"[CampaignAgg] 집계 완료 | 그룹 수={len(groups)}")
+
+
 def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
     """
     daily + hourly 집계를 한 번에 실행합니다.
@@ -290,3 +345,4 @@ def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
     """
     run_daily_aggregation(db, target_date)
     run_hourly_aggregation(db, target_date)
+    run_campaign_aggregation(db)
