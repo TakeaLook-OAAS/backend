@@ -247,3 +247,36 @@ class DailyAgg(Base):
     device   = relationship("Device")
     # roi   = relationship("ROI")  # ROI 비활성화
     campaign = relationship("Campaign")
+
+
+# 7. 캠페인 전체 통계 집계 (Campaign Aggregation)
+class CampaignAgg(Base):
+    __tablename__ = "campaign_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+
+    exposure_count      = Column(Integer, nullable=False, default=0)
+    interested_count    = Column(Integer, nullable=False, default=0)
+    attention_rate      = Column(Float,   nullable=False, default=0.0)
+    avg_viewing_time_ms = Column(Float,   nullable=False, default=0.0)
+
+    count_10s      = Column(Integer, nullable=False, default=0)
+    count_20s      = Column(Integer, nullable=False, default=0)
+    count_30s      = Column(Integer, nullable=False, default=0)
+    count_40s      = Column(Integer, nullable=False, default=0)
+    count_50s_plus = Column(Integer, nullable=False, default=0)
+
+    count_male   = Column(Integer, nullable=False, default=0)
+    count_female = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("device_id", "campaign_id", name="uq_campaign_agg"),
+    )
+
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
