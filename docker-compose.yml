@@ -1,13 +1,13 @@
 services:
-  # #env_file 옵션
-  # api:
-  #   build: .
-  #   env_file:
-  #     - .env        # ← Docker가 직접 주입
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     - db
+  #env_file 옵션
+  api:
+    build: . 
+    env_file:
+      - .env        # ← Docker가 직접 주입
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
   # db / portgresql
   db:
     image: postgres:15-alpine
