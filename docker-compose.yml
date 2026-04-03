@@ -1,17 +1,25 @@
+name: oaas
+
 services:
   #env_file 옵션
   api:
-    build: . 
+    build: .
+    container_name: back_dev
     env_file:
-      - .env        # ← Docker가 직접 주입
+      - .env # ← Docker가 직접 주입
     ports:
       - "8000:8000"
+    volumes:
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       - db
+    networks:
+      - oaas-net
   # db / portgresql
   db:
     image: postgres:15-alpine
-    container_name: projectgraduate_db
+    container_name: db
     restart: always
     environment:
       POSTGRES_USER: admin01
@@ -22,7 +30,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-
+    networks:
+      - oaas-net
   # redis:
   #   image: redis:7-alpine
   #   container_name: asdf_redis
@@ -32,3 +41,7 @@ services:
 
 volumes:
   postgres_data: {}
+
+networks:
+  oaas-net:
+    external: true
