@@ -1,122 +1,145 @@
+# # ts 기준으로 어제 날짜 데이터만 조회
+# events_raw에서 DATE(ts) = 어제
+# ```
+
+# ---
+
+# **어떻게 그룹핑하나요?**
+# ```
+# 같은 기기 + 같은 캠페인끼리 묶음
+
+# 예시:
+# 기기A + 삼성광고 → 50명 데이터 → 집계 1행
+# 기기A + 나이키광고 → 30명 데이터 → 집계 1행
+# ```
+
+# ---
+
+# **각 그룹에서 뭘 계산하나요?**
+
+# | 지표 | 계산식 |
+# |------|--------|
+# | 노출 인구 | 전체 track 수 |
+# | Avg Dwell Time | sum(exposure_ms) / 전체 track 수 |
+# | Attention Time | sum(total_look_duration_ms) — 관심 인구만 |
+# | Attention Rate_Tracks | 관심 인구 / 전체 인구 |
+# | Attention Rate_Times | Attention Time / sum(exposure_ms) |
+# | 나이대/성별 | 각각 카운트 |
+
+# ---
+
+# **세 가지 집계를 실행해요**
+# ```
+# run_daily_aggregation()   → daily_aggs (날짜별)
+# run_hourly_aggregation()  → hourly_aggs (시간별)
+# run_campaign_aggregation()→ campaign_aggs (캠페인 전체 기간)
+
 import logging
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from models import EventRaw, DailyAgg, HourlyAgg, CampaignAgg
 
-# 이 파일의 로거 생성 — 경고/정보 메시지를 터미널에 출력하는 데 사용
 logger = logging.getLogger(__name__)
 
 # ── 상수 ─────────────────────────────────────────────────────────────────────
 
-# AI팀이 보내는 나이대 문자열을 DB 컬럼명으로 매핑하는 딕셔너리
-# AI팀 형식: "10-19", "20-29", ... (segment.json 기준)
-# DB 컬럼명: count_10s, count_20s, ...
+# AI팀이 보내는 나이대 문자열을 DB 컬럼명으로 매핑
 AGE_MAP = {
     "10-19": "count_10s",
     "20-29": "count_20s",
     "30-39": "count_30s",
     "40-49": "count_40s",
     "50-59": "count_50s_plus",
+    "60+":   "count_60s_plus",
 }
 
-# 배치 주기 (분)
-# AI팀은 10분마다 데이터를 배치로 전송함
-# ts(AI팀이 찍은 시각)와 ingested_at(서버 수신 시각)의 차이가
-# 이 값보다 크면 네트워크 지연 또는 기기 장애를 의심할 수 있음
+# 배치 주기 (분) — ts와 ingested_at 차이가 이 값보다 크면 경고
 BATCH_INTERVAL_MINUTES = 10
 
+# !!! 테스트를 위해 배치 지연 로직을 잠시 주석처리함 !!!
+# # ── 내부 헬퍼 함수 ────────────────────────────────────────────────────────────
 
-# ── 내부 헬퍼 함수 ────────────────────────────────────────────────────────────
-
-def _check_batch_delay(ts: datetime, ingested_at: datetime) -> None:
-    """
-    배치 지연을 감지하고 경고 로그를 출력합니다.
-
-    AI팀 기기(노트북)는 NTP로 시간이 자동 동기화되므로 ts는 신뢰할 수 있습니다.
-    따라서 ts와 ingested_at의 차이가 배치 주기(10분)보다 크다면
-    네트워크 문제 또는 기기 장애가 발생했을 가능성이 있습니다.
-
-    Args:
-        ts: AI팀이 찍은 배치 기준 시각 (segment.timestamp)
-        ingested_at: 서버가 요청을 수신한 시각 (server_default=func.now())
-    """
-    diff = ingested_at - ts
-    if diff > timedelta(minutes=BATCH_INTERVAL_MINUTES):
-        logger.warning(
-            f"배치 지연 감지 | ts={ts} | ingested_at={ingested_at} | 지연={diff}"
-        )
+# def _check_batch_delay(ts: datetime, ingested_at: datetime) -> None:
+#     """
+#     ts와 ingested_at 차이가 배치 주기(10분)보다 크면 경고 로그 출력.
+#     AI팀 기기는 NTP로 시간 동기화되므로 ts는 신뢰할 수 있음.
+#     """
+#     diff = ingested_at - ts
+#     if diff > timedelta(minutes=BATCH_INTERVAL_MINUTES):
+#         logger.warning(
+#             f"배치 지연 감지 | ts={ts} | ingested_at={ingested_at} | 지연={diff}"
+#         )
 
 
 def _build_agg_counts(rows: list[EventRaw]) -> dict:
     """
     events_raw 행 목록을 받아 집계 지표를 계산하고 딕셔너리로 반환합니다.
-    daily_agg와 hourly_agg 모두 동일한 집계 로직을 사용하므로 공통 함수로 분리했습니다.
 
-    관심 인구 판단 기준:
-        AI팀이 1500ms 이상인 look_time만 정제해서 보내기로 했으므로
-        look_times 리스트가 비어있지 않으면 무조건 관심 인구로 판단합니다.
-
-    Args:
-        rows: 집계할 events_raw 행 목록 (같은 device_id, campaign_id, 날짜/시간 기준)
-
-    Returns:
-        dict: 집계 결과 딕셔너리
-            - exposure_count     : 전체 노출 인구 수 (전체 행 수)
-            - interested_count   : 관심 인구 수 (look_times가 있는 행 수)
-            - attention_rate     : 관심도 = interested_count / exposure_count (소수점 4자리)
-            - avg_viewing_time_ms: 관심 인구의 평균 시청 시간 (ms, 소수점 2자리)
-            - count_10s ~ count_50s_plus: 나이대별 인원
-            - count_male / count_female : 성별 인원
+    지표 계산 방식:
+        - exposure_count        : 전체 Track 수
+        - avg_dwell_time_ms     : sum(exposure_ms) / 전체 Track 수
+        - interested_count      : look_times가 있는 Track 수
+        - attention_rate_tracks : interested_count / exposure_count
+        - total_attention_time_ms: sum(total_look_duration_ms) — 관심 인구만
+        - attention_rate_times  : total_attention_time_ms / sum(exposure_ms)
+        - count_10s ~ count_60s_plus: 나이대별 인원
+        - count_male / count_female : 성별 인원
     """
-    # 전체 노출 인구 = 전달받은 행 수
+    # ── 노출 인구 ──────────────────────────────────────────────────────────────
     exposure_count = len(rows)
 
-    # 관심 인구 = look_times 리스트가 비어있지 않은 행
-    # look_times가 빈 리스트([])이면 False, 원소가 하나라도 있으면 True
+    # ── 체류 시간 ─────────────────────────────────────────────────────────────
+    # 전체 Track의 exposure_ms 합계
+    total_exposure_ms = sum(r.exposure_ms for r in rows)
+
+    # Avg Dwell Time = 총 체류시간 / 전체 Track 수
+    avg_dwell_time_ms = (
+        total_exposure_ms / exposure_count if exposure_count > 0 else 0.0
+    )
+
+    # ── 관심 인구 ─────────────────────────────────────────────────────────────
+    # look_times가 비어있지 않은 Track = 관심 인구
     interested_rows  = [r for r in rows if r.look_times]
     interested_count = len(interested_rows)
 
-    # 관심도 = 관심 인구 / 전체 노출 인구
-    # exposure_count가 0이면 ZeroDivisionError 방지를 위해 0.0 반환
-    attention_rate = (
+    # Attention Rate_Tracks = 관심 인구 / 전체 인구
+    attention_rate_tracks = (
         round(interested_count / exposure_count, 4) if exposure_count > 0 else 0.0
     )
 
-    # 평균 시청 시간 = 관심 인구의 total_look_duration_ms 합계 / 관심 인구 수
-    # 관심 인구가 0이면 ZeroDivisionError 방지를 위해 0.0 반환
-    avg_viewing_time_ms = (
-        sum(r.total_look_duration_ms for r in interested_rows) / interested_count
-        if interested_count > 0 else 0.0
+    # ── 시청 시간 ─────────────────────────────────────────────────────────────
+    # Attention Time = 관심 인구의 total_look_duration_ms 합계
+    total_attention_time_ms = sum(r.total_look_duration_ms for r in interested_rows)
+
+    # Attention Rate_Times = Attention Time / 전체 인구의 exposure_ms 합계
+    attention_rate_times = (
+        round(total_attention_time_ms / total_exposure_ms, 4)
+        if total_exposure_ms > 0 else 0.0
     )
 
-    # 나이대별 카운트 딕셔너리 초기화
-    # AGE_MAP의 value(컬럼명)를 key로, 0을 value로 초기화
-    # 예: {"count_10s": 0, "count_20s": 0, ...}
+    # ── 나이대 / 성별 카운트 ─────────────────────────────────────────────────
     age_counts = {col: 0 for col in AGE_MAP.values()}
-
     count_male   = 0
     count_female = 0
 
     for row in rows:
         # age_group이 null이거나 AGE_MAP에 없는 값이면 카운트하지 않음
-        # (AI팀이 분석 못한 경우 age_group이 null로 올 수 있음)
         if row.age_group and row.age_group in AGE_MAP:
             age_counts[AGE_MAP[row.age_group]] += 1
 
-        # 성별 카운트
         if row.gender == "male":
             count_male += 1
         elif row.gender == "female":
             count_female += 1
 
-    # 모든 집계 결과를 하나의 딕셔너리로 반환
-    # **age_counts로 나이대별 컬럼을 딕셔너리에 펼쳐 넣음
     return {
-        "exposure_count":      exposure_count,
-        "interested_count":    interested_count,
-        "attention_rate":      attention_rate,
-        "avg_viewing_time_ms": round(avg_viewing_time_ms, 2),
+        "exposure_count":          exposure_count,
+        "avg_dwell_time_ms":       round(avg_dwell_time_ms, 2),
+        "interested_count":        interested_count,
+        "attention_rate_tracks":   attention_rate_tracks,
+        "total_attention_time_ms": float(total_attention_time_ms),
+        "attention_rate_times":    attention_rate_times,
         **age_counts,
         "count_male":   count_male,
         "count_female": count_female,
@@ -127,57 +150,35 @@ def _build_agg_counts(rows: list[EventRaw]) -> dict:
 
 def run_daily_aggregation(db: Session, target_date: date | None = None) -> None:
     """
-    특정 날짜의 events_raw를 daily_aggs 테이블에 일 단위로 집계합니다.
-
-    집계 기준:
-        - ts 컬럼 (AI팀이 찍은 배치 기준 시각) 기준으로 날짜를 필터링
-        - (device_id, campaign_id) 조합별로 그룹핑하여 각각 1행으로 저장
-        - 이미 해당 날짜의 집계 데이터가 있으면 UPDATE, 없으면 INSERT
-
-    Args:
-        db: SQLAlchemy 세션
-        target_date: 집계할 날짜. None이면 어제 날짜를 자동으로 사용.
-                     APScheduler가 매일 자정에 target_date 없이 호출하므로
-                     자동으로 전날 데이터를 집계합니다.
+    특정 날짜의 events_raw를 daily_aggs에 일 단위로 집계합니다.
+    target_date가 None이면 어제 날짜를 자동으로 사용합니다.
     """
-    # target_date가 없으면 어제 날짜를 사용
-    # (자정에 실행되므로 어제 = 방금 끝난 하루)
     if target_date is None:
         target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
 
     logger.info(f"[DailyAgg] 집계 시작 | date={target_date}")
 
-    # ts 컬럼의 날짜 부분만 추출해서 target_date와 비교
-    # func.date()는 PostgreSQL의 DATE() 함수로 DateTime → Date 변환
     rows = (
         db.query(EventRaw)
         .filter(func.date(EventRaw.ts) == target_date)
         .all()
     )
 
-    # 데이터가 없으면 집계하지 않고 종료
     if not rows:
         logger.info(f"[DailyAgg] 데이터 없음 | date={target_date}")
         return
 
-    # 각 행의 배치 지연 여부 확인 (ts와 ingested_at 차이 체크)
-    for row in rows:
-        _check_batch_delay(row.ts, row.ingested_at)
+    # for row in rows:
+    #     _check_batch_delay(row.ts, row.ingested_at)
 
-    # (device_id, campaign_id) 조합별로 행을 그룹핑
-    # 같은 기기, 같은 캠페인의 데이터를 묶어서 집계
-    # 예: {(device_uuid_1, campaign_uuid_1): [row1, row2, ...], ...}
     groups: dict[tuple, list[EventRaw]] = {}
     for row in rows:
         key = (row.device_id, row.campaign_id)
         groups.setdefault(key, []).append(row)
 
-    # 각 그룹별로 집계 후 DB에 저장
     for (device_id, campaign_id), group_rows in groups.items():
         counts = _build_agg_counts(group_rows)
 
-        # 이미 같은 날짜/기기/캠페인 조합의 집계 데이터가 있는지 확인
-        # (스케줄러가 실수로 두 번 실행되는 경우를 대비)
         existing = (
             db.query(DailyAgg)
             .filter_by(date=target_date, device_id=device_id, campaign_id=campaign_id)
@@ -185,13 +186,10 @@ def run_daily_aggregation(db: Session, target_date: date | None = None) -> None:
         )
 
         if existing:
-            # 이미 있으면 각 컬럼 값을 업데이트
             for key, val in counts.items():
                 setattr(existing, key, val)
             logger.info(f"[DailyAgg] 업데이트 | date={target_date} | device={device_id} | campaign={campaign_id}")
         else:
-            # 없으면 새 행 INSERT
-            # **counts로 딕셔너리를 키워드 인자로 펼쳐서 DailyAgg 객체 생성
             db.add(DailyAgg(
                 date=target_date,
                 device_id=device_id,
@@ -200,24 +198,14 @@ def run_daily_aggregation(db: Session, target_date: date | None = None) -> None:
             ))
             logger.info(f"[DailyAgg] 신규 INSERT | date={target_date} | device={device_id} | campaign={campaign_id}")
 
-    # 모든 그룹 처리 완료 후 한 번에 커밋
     db.commit()
     logger.info(f"[DailyAgg] 집계 완료 | date={target_date} | 그룹 수={len(groups)}")
 
 
 def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None:
     """
-    특정 날짜의 events_raw를 hourly_aggs 테이블에 시간 단위로 집계합니다.
-
-    집계 기준:
-        - ts 컬럼 기준으로 날짜를 필터링
-        - ts의 분/초를 버리고 시간 단위로 버킷화 (예: 14:35:22 → 14:00:00)
-        - (device_id, campaign_id, hour) 조합별로 그룹핑하여 각각 1행으로 저장
-        - 이미 해당 시간의 집계 데이터가 있으면 UPDATE, 없으면 INSERT
-
-    Args:
-        db: SQLAlchemy 세션
-        target_date: 집계할 날짜. None이면 어제 날짜를 자동으로 사용.
+    특정 날짜의 events_raw를 hourly_aggs에 시간 단위로 집계합니다.
+    target_date가 None이면 어제 날짜를 자동으로 사용합니다.
     """
     if target_date is None:
         target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
@@ -234,11 +222,9 @@ def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None
         logger.info(f"[HourlyAgg] 데이터 없음 | date={target_date}")
         return
 
-    # (device_id, campaign_id, hour_bucket) 조합별로 행을 그룹핑
-    # hour_bucket: ts의 분/초/마이크로초를 0으로 만들어 시간 단위로 통일
-    # 예: 2026-03-25 14:35:22+09:00 → 2026-03-25 14:00:00+09:00
     groups: dict[tuple, list[EventRaw]] = {}
     for row in rows:
+        # ts의 분/초를 버리고 시간 단위 버킷화 (14:35 → 14:00)
         hour_bucket = row.ts.replace(minute=0, second=0, microsecond=0)
         key = (row.device_id, row.campaign_id, hour_bucket)
         groups.setdefault(key, []).append(row)
@@ -271,15 +257,8 @@ def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None
 
 def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
     """
-    캠페인 전체 기간의 events_raw를 campaign_aggs 테이블에 집계합니다.
-
-    집계 기준:
-        - (device_id, campaign_id) 조합별로 그룹핑하여 각각 1행으로 저장
-        - 이미 해당 조합의 집계 데이터가 있으면 UPDATE, 없으면 INSERT
-
-    Args:
-        db: SQLAlchemy 세션
-        campaign_id: 특정 캠페인만 집계. None이면 전체 캠페인 대상.
+    캠페인 전체 기간의 events_raw를 campaign_aggs에 집계합니다.
+    campaign_id가 None이면 전체 캠페인 대상으로 집계합니다.
     """
     logger.info(f"[CampaignAgg] 집계 시작 | campaign_id={campaign_id}")
 
@@ -293,7 +272,6 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
         logger.info(f"[CampaignAgg] 데이터 없음 | campaign_id={campaign_id}")
         return
 
-    # (device_id, campaign_id) 조합별로 그룹핑
     groups: dict[tuple, list[EventRaw]] = {}
     for row in rows:
         key = (row.device_id, row.campaign_id)
@@ -326,22 +304,17 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
 
 def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
     """
-    daily + hourly 집계를 한 번에 실행합니다.
-
+    daily + hourly + campaign 집계를 한 번에 실행합니다.
     APScheduler가 매일 자정에 이 함수를 호출합니다.
-    테스트 시에는 직접 호출할 수 있습니다:
 
+    직접 실행 예시:
         from database import SessionLocal
         from Aggregation import run_all_aggregations
         from datetime import date
 
         db = SessionLocal()
-        run_all_aggregations(db, target_date=date(2026, 3, 25))
+        run_all_aggregations(db, target_date=date(2026, 4, 3))
         db.close()
-
-    Args:
-        db: SQLAlchemy 세션
-        target_date: 집계할 날짜. None이면 어제 날짜를 자동으로 사용.
     """
     run_daily_aggregation(db, target_date)
     run_hourly_aggregation(db, target_date)

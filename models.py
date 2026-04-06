@@ -1,3 +1,24 @@
+# 각 테이블 역할
+# devices — AI 기기 정보
+# 기기 이름, 상태(ENABLE/DISABLE), 타임존
+# campaigns — 광고 캠페인 정보
+# 광고명, 시작일, 종료일, 상태(DRAFT/RUNNING/PAUSED/ENDED)
+# device_campaigns — 기기와 캠페인 연결 (다대다)
+# device_id + campaign_id + cycle_index
+# → "이 기기에서 몇 번째 광고가 어떤 캠페인인지"
+# 예시:
+# 기기A + cycle_index=0 → 삼성 광고
+# 기기A + cycle_index=1 → 나이키 광고
+# 기기A + cycle_index=2 → 애플 광고
+# segment_logs — 배치 메타데이터
+# 배치가 언제 왔는지, roi_polygon이 뭔지
+# → 나중에 골든존 분석할 때 사용
+# events_raw — 원본 로그 (핵심 테이블)
+# track 1개 = 1행
+# 사람 1명의 노출 정보, 시선 정보, 나이대, 성별
+# daily_aggs / hourly_aggs / campaign_aggs — 집계 결과
+# events_raw를 날짜/시간/캠페인 단위로 집계한 결과
+# 프론트가 이 테이블에서 데이터를 가져감
 # sqlalchemy
 from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, text, Enum, BigInteger, Boolean
 from sqlalchemy.orm import declarative_base, relationship
@@ -73,14 +94,12 @@ class Campaign(Base):
 
 
 # 3-1. 기기-캠페인 연결 (다대다 중간 테이블)
-# AI팀이 device_id + cycle_index를 보내면 서버가 campaign_id를 찾아주는 구조
 class DeviceCampaign(Base):
     __tablename__ = "device_campaigns"
 
     id          = Column(BigInteger, primary_key=True, autoincrement=True)
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-    # 이 기기에서 몇 번째 광고인지 (AI팀이 segment.cycle_index로 보내주는 값)
     cycle_index = Column(Integer, nullable=False)
     created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
@@ -94,76 +113,52 @@ class DeviceCampaign(Base):
 
 
 # 3-2. 배치 세그먼트 로그
-# AI팀이 보내는 배치 단위 메타데이터를 저장합니다.
-# roi_polygon을 track마다 중복 저장하지 않고 배치 단위(1행)로 저장합니다.
-# 나중에 ROI 분석 (골든 존 탐색) 시 활용합니다.
 class SegmentLog(Base):
     __tablename__ = "segment_logs"
 
     id          = Column(BigInteger, primary_key=True, autoincrement=True)
-
-    # 배치 기준 시각 (segment.timestamp) — events_raw.ts와 동일한 값
     ts          = Column(DateTime(timezone=True), nullable=False)
-    # 서버 수신 시각
     ingested_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-    # 외래키
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="RESTRICT"), nullable=False)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="RESTRICT"), nullable=False)
-
-    # 배치 메타데이터
-    index       = Column(Integer, nullable=False)   # 배치 인덱스
-    cycle_index = Column(Integer, nullable=False)   # 몇 번째 광고인지
-    duration_ms = Column(Integer, nullable=False)   # 배치 지속 시간 (ms)
-
-    # ROI 폴리곤 (화면 전체 좌표 4점)
-    # 예: [[0,0],[1920,0],[1920,1080],[0,1080]]
-    # 나중에 ROI를 줄여가며 관심도 증가율이 가장 높은 골든 존을 찾을 때 사용
+    index       = Column(Integer, nullable=False)
+    cycle_index = Column(Integer, nullable=False)
+    duration_ms = Column(Integer, nullable=False)
     roi_polygon = Column(JSONB, nullable=True)
 
-    device   = relationship("Device", back_populates="segment_logs")
+    device = relationship("Device", back_populates="segment_logs")
 
 
 # 4. 실시간 수집 원본 로그 (track 단위 1행)
 class EventRaw(Base):
     __tablename__ = "events_raw"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-
-    # AI팀이 찍은 배치 기준 시각 (segment.timestamp) — 집계 기준
+    id          = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
     ts          = Column(DateTime(timezone=True), nullable=False)
-    # 서버 수신 시각 — 배치 지연 모니터링용 (ts와 차이가 배치 주기보다 크면 경고)
     ingested_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
-    # 외래키
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="RESTRICT"), nullable=False)
     # roi_id   = Column(UUID(as_uuid=True), ForeignKey("rois.id",      ondelete="RESTRICT"), nullable=False)  # ROI 비활성화
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="RESTRICT"), nullable=False)
 
-    # AI팀 track 식별자 (배치 내 정수 ID)
-    track_id = Column(Integer, nullable=False)
-
-    # 노출 정보 (ms 단위)
+    track_id          = Column(Integer, nullable=False)
     exposure_start_ms = Column(Integer, nullable=False)
     exposure_end_ms   = Column(Integer, nullable=False)
     exposure_ms       = Column(Integer, nullable=False)  # end_ms - start_ms
 
-    # 시선 구간 목록 (JSONB 유지 — 원본 보존 목적)
-    # duration_ms는 AI팀이 보내지 않으며 백엔드에서 end_ms - start_ms로 계산
-    look_times = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
-
-    # 총 시선 시간 (ms 단위)
+    # look_times: start_center, end_center 좌표 포함 (골든존 분석용)
+    # [{"start_ms": int, "end_ms": int, "start_center": [x,y], "end_center": [x,y]}]
+    look_times             = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     total_look_duration_ms = Column(Integer, nullable=False, default=0)
 
-    # 인구통계 (nullable — AI가 분석 못할 수도 있음)
-    # "unknown"은 수신 시 None으로 변환하여 저장
+    # 인구통계 (nullable — AI가 분석 못할 수도 있음, "unknown"은 None으로 변환)
     age_group = Column(String(20), nullable=True)
     gender    = Column(String(10), nullable=True)
 
     __table_args__ = (
         UniqueConstraint("device_id", "track_id", "ts", name="uq_event_raw_track"),
         CheckConstraint(
-            "age_group IN ('10-19', '20-29', '30-39', '40-49', '50-59') OR age_group IS NULL",
+            "age_group IN ('10-19', '20-29', '30-39', '40-49', '50-59', '60+') OR age_group IS NULL",
             name="chk_age_group"
         ),
         CheckConstraint(
@@ -177,8 +172,39 @@ class EventRaw(Base):
     campaign = relationship("Campaign", back_populates="events")
 
 
+# 공통 집계 컬럼 Mixin
+# HourlyAgg, DailyAgg, CampaignAgg가 동일한 집계 컬럼을 공유
+class AggMixin:
+    # 노출 인구
+    exposure_count        = Column(Integer, nullable=False, default=0)   # 전체 Track 수
+
+    # 체류 시간
+    avg_dwell_time_ms     = Column(Float,   nullable=False, default=0.0) # 총 체류시간 / 전체 Track 수
+
+    # 관심도 지표
+    interested_count      = Column(Integer, nullable=False, default=0)   # look_times 있는 Track 수
+    attention_rate_tracks = Column(Float,   nullable=False, default=0.0) # interested_count / exposure_count
+    total_attention_time_ms = Column(Float, nullable=False, default=0.0) # total_look_duration_ms 합계
+    attention_rate_times  = Column(Float,   nullable=False, default=0.0) # total_attention_time_ms / sum(exposure_ms)
+
+    # 나이대별 인원
+    count_10s      = Column(Integer, nullable=False, default=0)  # 10-19
+    count_20s      = Column(Integer, nullable=False, default=0)  # 20-29
+    count_30s      = Column(Integer, nullable=False, default=0)  # 30-39
+    count_40s      = Column(Integer, nullable=False, default=0)  # 40-49
+    count_50s_plus = Column(Integer, nullable=False, default=0)  # 50-59
+    count_60s_plus = Column(Integer, nullable=False, default=0)  # 60+
+
+    # 성별 인원
+    count_male   = Column(Integer, nullable=False, default=0)
+    count_female = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
 # 5. 시간 단위 통계 집계 (Hourly Aggregation)
-class HourlyAgg(Base):
+class HourlyAgg(AggMixin, Base):
     __tablename__ = "hourly_aggs"
 
     id          = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -186,23 +212,6 @@ class HourlyAgg(Base):
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
     # roi_id   = Column(UUID(as_uuid=True), ForeignKey("rois.id",      ondelete="CASCADE"), nullable=False)  # ROI 비활성화
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-
-    exposure_count      = Column(Integer, nullable=False, default=0)
-    interested_count    = Column(Integer, nullable=False, default=0)
-    attention_rate      = Column(Float,   nullable=False, default=0.0)
-    avg_viewing_time_ms = Column(Float,   nullable=False, default=0.0)
-
-    count_10s      = Column(Integer, nullable=False, default=0)
-    count_20s      = Column(Integer, nullable=False, default=0)
-    count_30s      = Column(Integer, nullable=False, default=0)
-    count_40s      = Column(Integer, nullable=False, default=0)
-    count_50s_plus = Column(Integer, nullable=False, default=0)
-
-    count_male   = Column(Integer, nullable=False, default=0)
-    count_female = Column(Integer, nullable=False, default=0)
-
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("hour", "device_id", "campaign_id", name="uq_hourly_agg"),
@@ -214,7 +223,7 @@ class HourlyAgg(Base):
 
 
 # 6. 일 단위 통계 집계 (Daily Aggregation)
-class DailyAgg(Base):
+class DailyAgg(AggMixin, Base):
     __tablename__ = "daily_aggs"
 
     id          = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -222,23 +231,6 @@ class DailyAgg(Base):
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
     # roi_id   = Column(UUID(as_uuid=True), ForeignKey("rois.id",      ondelete="CASCADE"), nullable=False)  # ROI 비활성화
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-
-    exposure_count      = Column(Integer, nullable=False, default=0)
-    interested_count    = Column(Integer, nullable=False, default=0)
-    attention_rate      = Column(Float,   nullable=False, default=0.0)
-    avg_viewing_time_ms = Column(Float,   nullable=False, default=0.0)
-
-    count_10s      = Column(Integer, nullable=False, default=0)
-    count_20s      = Column(Integer, nullable=False, default=0)
-    count_30s      = Column(Integer, nullable=False, default=0)
-    count_40s      = Column(Integer, nullable=False, default=0)
-    count_50s_plus = Column(Integer, nullable=False, default=0)
-
-    count_male   = Column(Integer, nullable=False, default=0)
-    count_female = Column(Integer, nullable=False, default=0)
-
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("date", "device_id", "campaign_id", name="uq_daily_agg"),
@@ -249,30 +241,13 @@ class DailyAgg(Base):
     campaign = relationship("Campaign")
 
 
-# 7. 캠페인 전체 통계 집계 (Campaign Aggregation)
-class CampaignAgg(Base):
+# 7. 캠페인 전체 기간 집계 (Campaign Aggregation)
+class CampaignAgg(AggMixin, Base):
     __tablename__ = "campaign_aggs"
 
     id          = Column(BigInteger, primary_key=True, autoincrement=True)
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-
-    exposure_count      = Column(Integer, nullable=False, default=0)
-    interested_count    = Column(Integer, nullable=False, default=0)
-    attention_rate      = Column(Float,   nullable=False, default=0.0)
-    avg_viewing_time_ms = Column(Float,   nullable=False, default=0.0)
-
-    count_10s      = Column(Integer, nullable=False, default=0)
-    count_20s      = Column(Integer, nullable=False, default=0)
-    count_30s      = Column(Integer, nullable=False, default=0)
-    count_40s      = Column(Integer, nullable=False, default=0)
-    count_50s_plus = Column(Integer, nullable=False, default=0)
-
-    count_male   = Column(Integer, nullable=False, default=0)
-    count_female = Column(Integer, nullable=False, default=0)
-
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint("device_id", "campaign_id", name="uq_campaign_agg"),

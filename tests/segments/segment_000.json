@@ -1,0 +1,1347 @@
+{
+  "segment": {
+    "device_id": "",
+    "index": 0,
+    "cycle_index": 0,
+    "timestamp": "2026-04-03T13:48:11.486512+00:00",
+    "duration_ms": 20000
+  },
+  "tracks": [
+    {
+      "track_id": 1,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 5605
+      },
+      "look_times": [
+        {
+          "start_ms": 3970,
+          "end_ms": 4504,
+          "start_center": [
+            1195,
+            321
+          ],
+          "end_center": [
+            1210,
+            274
+          ]
+        }
+      ],
+      "total_look_duration_ms": 534,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 2,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 11644
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "50-59",
+      "gender": "male"
+    },
+    {
+      "track_id": 3,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 19819
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 4,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 9142
+      },
+      "look_times": [
+        {
+          "start_ms": 5672,
+          "end_ms": 6339,
+          "start_center": [
+            1112,
+            156
+          ],
+          "end_center": [
+            1149,
+            153
+          ]
+        }
+      ],
+      "total_look_duration_ms": 667,
+      "age_group": "10-19",
+      "gender": "female"
+    },
+    {
+      "track_id": 5,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 3503
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 6,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 333
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 7,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 14981
+      },
+      "look_times": [
+        {
+          "start_ms": 8074,
+          "end_ms": 11211,
+          "start_center": [
+            852,
+            330
+          ],
+          "end_center": [
+            1045,
+            476
+          ]
+        }
+      ],
+      "total_look_duration_ms": 3137,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 8,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 4971
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 9,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 14981
+      },
+      "look_times": [
+        {
+          "start_ms": 1468,
+          "end_ms": 2102,
+          "start_center": [
+            556,
+            397
+          ],
+          "end_center": [
+            601,
+            361
+          ]
+        },
+        {
+          "start_ms": 2268,
+          "end_ms": 2869,
+          "start_center": [
+            627,
+            381
+          ],
+          "end_center": [
+            636,
+            328
+          ]
+        },
+        {
+          "start_ms": 14948,
+          "end_ms": 20000,
+          "start_center": [
+            1240,
+            273
+          ],
+          "end_center": [
+            1240,
+            273
+          ]
+        }
+      ],
+      "total_look_duration_ms": 6287,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 10,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 3202
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 11,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 19052
+      },
+      "look_times": [
+        {
+          "start_ms": 5672,
+          "end_ms": 6172,
+          "start_center": [
+            476,
+            372
+          ],
+          "end_center": [
+            502,
+            357
+          ]
+        }
+      ],
+      "total_look_duration_ms": 500,
+      "age_group": "unknown",
+      "gender": "female"
+    },
+    {
+      "track_id": 12,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 7907
+      },
+      "look_times": [
+        {
+          "start_ms": 6840,
+          "end_ms": 7640,
+          "start_center": [
+            1213,
+            337
+          ],
+          "end_center": [
+            1229,
+            325
+          ]
+        }
+      ],
+      "total_look_duration_ms": 800,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 13,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 17150
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 14,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 3169
+      },
+      "look_times": [
+        {
+          "start_ms": 433,
+          "end_ms": 1201,
+          "start_center": [
+            443,
+            207
+          ],
+          "end_center": [
+            498,
+            188
+          ]
+        },
+        {
+          "start_ms": 1735,
+          "end_ms": 3003,
+          "start_center": [
+            516,
+            174
+          ],
+          "end_center": [
+            607,
+            136
+          ]
+        }
+      ],
+      "total_look_duration_ms": 2036,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 15,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 3770
+      },
+      "look_times": [
+        {
+          "start_ms": 533,
+          "end_ms": 1101,
+          "start_center": [
+            1108,
+            563
+          ],
+          "end_center": [
+            1145,
+            552
+          ]
+        }
+      ],
+      "total_look_duration_ms": 568,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 16,
+      "exposure": {
+        "start_ms": 0,
+        "end_ms": 867
+      },
+      "look_times": [
+        {
+          "start_ms": 834,
+          "end_ms": 20000,
+          "start_center": [
+            1215,
+            459
+          ],
+          "end_center": [
+            1215,
+            459
+          ]
+        }
+      ],
+      "total_look_duration_ms": 19166,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 17,
+      "exposure": {
+        "start_ms": 66,
+        "end_ms": 2935
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "unknown",
+      "gender": "female"
+    },
+    {
+      "track_id": 18,
+      "exposure": {
+        "start_ms": 266,
+        "end_ms": 6139
+      },
+      "look_times": [
+        {
+          "start_ms": 2068,
+          "end_ms": 3003,
+          "start_center": [
+            1074,
+            634
+          ],
+          "end_center": [
+            1125,
+            608
+          ]
+        },
+        {
+          "start_ms": 3236,
+          "end_ms": 4304,
+          "start_center": [
+            1143,
+            604
+          ],
+          "end_center": [
+            1187,
+            567
+          ]
+        }
+      ],
+      "total_look_duration_ms": 2003,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 19,
+      "exposure": {
+        "start_ms": 433,
+        "end_ms": 16616
+      },
+      "look_times": [
+        {
+          "start_ms": 10410,
+          "end_ms": 10910,
+          "start_center": [
+            860,
+            565
+          ],
+          "end_center": [
+            900,
+            585
+          ]
+        }
+      ],
+      "total_look_duration_ms": 500,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 20,
+      "exposure": {
+        "start_ms": 467,
+        "end_ms": 2335
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 21,
+      "exposure": {
+        "start_ms": 934,
+        "end_ms": 9642
+      },
+      "look_times": [
+        {
+          "start_ms": 5505,
+          "end_ms": 6539,
+          "start_center": [
+            1109,
+            543
+          ],
+          "end_center": [
+            1157,
+            530
+          ]
+        },
+        {
+          "start_ms": 6706,
+          "end_ms": 7340,
+          "start_center": [
+            1167,
+            527
+          ],
+          "end_center": [
+            1195,
+            524
+          ]
+        },
+        {
+          "start_ms": 7774,
+          "end_ms": 8608,
+          "start_center": [
+            1197,
+            526
+          ],
+          "end_center": [
+            1228,
+            533
+          ]
+        }
+      ],
+      "total_look_duration_ms": 2502,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 22,
+      "exposure": {
+        "start_ms": 1101,
+        "end_ms": 14280
+      },
+      "look_times": [
+        {
+          "start_ms": 6840,
+          "end_ms": 7540,
+          "start_center": [
+            387,
+            515
+          ],
+          "end_center": [
+            444,
+            522
+          ]
+        },
+        {
+          "start_ms": 8508,
+          "end_ms": 9075,
+          "start_center": [
+            498,
+            534
+          ],
+          "end_center": [
+            531,
+            541
+          ]
+        }
+      ],
+      "total_look_duration_ms": 1267,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 23,
+      "exposure": {
+        "start_ms": 1201,
+        "end_ms": 3569
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 24,
+      "exposure": {
+        "start_ms": 1468,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "50-59",
+      "gender": "male"
+    },
+    {
+      "track_id": 26,
+      "exposure": {
+        "start_ms": 2002,
+        "end_ms": 14047
+      },
+      "look_times": [
+        {
+          "start_ms": 8174,
+          "end_ms": 10343,
+          "start_center": [
+            936,
+            523
+          ],
+          "end_center": [
+            1043,
+            569
+          ]
+        },
+        {
+          "start_ms": 10510,
+          "end_ms": 11211,
+          "start_center": [
+            1098,
+            570
+          ],
+          "end_center": [
+            1120,
+            598
+          ]
+        },
+        {
+          "start_ms": 13913,
+          "end_ms": 20000,
+          "start_center": [
+            1242,
+            676
+          ],
+          "end_center": [
+            1242,
+            676
+          ]
+        }
+      ],
+      "total_look_duration_ms": 8957,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 27,
+      "exposure": {
+        "start_ms": 3837,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 6006,
+          "end_ms": 6706,
+          "start_center": [
+            162,
+            189
+          ],
+          "end_center": [
+            226,
+            180
+          ]
+        },
+        {
+          "start_ms": 16182,
+          "end_ms": 16816,
+          "start_center": [
+            779,
+            501
+          ],
+          "end_center": [
+            815,
+            494
+          ]
+        }
+      ],
+      "total_look_duration_ms": 1334,
+      "age_group": "40-49",
+      "gender": "female"
+    },
+    {
+      "track_id": 28,
+      "exposure": {
+        "start_ms": 4004,
+        "end_ms": 10676
+      },
+      "look_times": [
+        {
+          "start_ms": 4004,
+          "end_ms": 4571,
+          "start_center": [
+            296,
+            677
+          ],
+          "end_center": [
+            337,
+            660
+          ]
+        },
+        {
+          "start_ms": 6039,
+          "end_ms": 6606,
+          "start_center": [
+            440,
+            629
+          ],
+          "end_center": [
+            478,
+            624
+          ]
+        },
+        {
+          "start_ms": 6639,
+          "end_ms": 9976,
+          "start_center": [
+            483,
+            623
+          ],
+          "end_center": [
+            675,
+            667
+          ]
+        },
+        {
+          "start_ms": 10443,
+          "end_ms": 20000,
+          "start_center": [
+            701,
+            673
+          ],
+          "end_center": [
+            701,
+            673
+          ]
+        }
+      ],
+      "total_look_duration_ms": 14028,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 29,
+      "exposure": {
+        "start_ms": 4037,
+        "end_ms": 14247
+      },
+      "look_times": [
+        {
+          "start_ms": 11144,
+          "end_ms": 12278,
+          "start_center": [
+            417,
+            603
+          ],
+          "end_center": [
+            476,
+            630
+          ]
+        },
+        {
+          "start_ms": 12946,
+          "end_ms": 13479,
+          "start_center": [
+            536,
+            652
+          ],
+          "end_center": [
+            536,
+            652
+          ]
+        }
+      ],
+      "total_look_duration_ms": 1667,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 30,
+      "exposure": {
+        "start_ms": 4137,
+        "end_ms": 10309
+      },
+      "look_times": [
+        {
+          "start_ms": 7107,
+          "end_ms": 7774,
+          "start_center": [
+            300,
+            629
+          ],
+          "end_center": [
+            324,
+            632
+          ]
+        },
+        {
+          "start_ms": 9609,
+          "end_ms": 10243,
+          "start_center": [
+            414,
+            661
+          ],
+          "end_center": [
+            483,
+            674
+          ]
+        }
+      ],
+      "total_look_duration_ms": 1301,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 31,
+      "exposure": {
+        "start_ms": 4270,
+        "end_ms": 10476
+      },
+      "look_times": [
+        {
+          "start_ms": 6973,
+          "end_ms": 7607,
+          "start_center": [
+            952,
+            618
+          ],
+          "end_center": [
+            1026,
+            619
+          ]
+        }
+      ],
+      "total_look_duration_ms": 634,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 32,
+      "exposure": {
+        "start_ms": 5071,
+        "end_ms": 8674
+      },
+      "look_times": [
+        {
+          "start_ms": 5772,
+          "end_ms": 8641,
+          "start_center": [
+            1154,
+            633
+          ],
+          "end_center": [
+            1252,
+            624
+          ]
+        }
+      ],
+      "total_look_duration_ms": 2869,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 33,
+      "exposure": {
+        "start_ms": 5205,
+        "end_ms": 9609
+      },
+      "look_times": [
+        {
+          "start_ms": 6439,
+          "end_ms": 6973,
+          "start_center": [
+            729,
+            626
+          ],
+          "end_center": [
+            726,
+            631
+          ]
+        },
+        {
+          "start_ms": 9576,
+          "end_ms": 20000,
+          "start_center": [
+            881,
+            659
+          ],
+          "end_center": [
+            881,
+            659
+          ]
+        }
+      ],
+      "total_look_duration_ms": 10958,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 34,
+      "exposure": {
+        "start_ms": 5372,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 11678,
+          "end_ms": 12445,
+          "start_center": [
+            339,
+            519
+          ],
+          "end_center": [
+            393,
+            535
+          ]
+        }
+      ],
+      "total_look_duration_ms": 767,
+      "age_group": "50-59",
+      "gender": "male"
+    },
+    {
+      "track_id": 35,
+      "exposure": {
+        "start_ms": 6339,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 36,
+      "exposure": {
+        "start_ms": 6539,
+        "end_ms": 10710
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 37,
+      "exposure": {
+        "start_ms": 7640,
+        "end_ms": 15948
+      },
+      "look_times": [
+        {
+          "start_ms": 15849,
+          "end_ms": 20000,
+          "start_center": [
+            485,
+            694
+          ],
+          "end_center": [
+            485,
+            694
+          ]
+        }
+      ],
+      "total_look_duration_ms": 4151,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 38,
+      "exposure": {
+        "start_ms": 8608,
+        "end_ms": 11844
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 39,
+      "exposure": {
+        "start_ms": 9843,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 19319,
+          "end_ms": 19853,
+          "start_center": [
+            648,
+            569
+          ],
+          "end_center": [
+            665,
+            558
+          ]
+        }
+      ],
+      "total_look_duration_ms": 534,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 41,
+      "exposure": {
+        "start_ms": 10810,
+        "end_ms": 11077
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": null,
+      "gender": null
+    },
+    {
+      "track_id": 42,
+      "exposure": {
+        "start_ms": 10810,
+        "end_ms": 16115
+      },
+      "look_times": [
+        {
+          "start_ms": 14180,
+          "end_ms": 15315,
+          "start_center": [
+            1201,
+            176
+          ],
+          "end_center": [
+            1235,
+            150
+          ]
+        },
+        {
+          "start_ms": 15882,
+          "end_ms": 20000,
+          "start_center": [
+            1248,
+            148
+          ],
+          "end_center": [
+            1248,
+            148
+          ]
+        }
+      ],
+      "total_look_duration_ms": 5253,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 43,
+      "exposure": {
+        "start_ms": 11611,
+        "end_ms": 13880
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 44,
+      "exposure": {
+        "start_ms": 11811,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "male"
+    },
+    {
+      "track_id": 45,
+      "exposure": {
+        "start_ms": 11911,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 15081,
+          "end_ms": 15615,
+          "start_center": [
+            402,
+            296
+          ],
+          "end_center": [
+            437,
+            269
+          ]
+        }
+      ],
+      "total_look_duration_ms": 534,
+      "age_group": "unknown",
+      "gender": "female"
+    },
+    {
+      "track_id": 46,
+      "exposure": {
+        "start_ms": 11911,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 15448,
+          "end_ms": 16282,
+          "start_center": [
+            290,
+            459
+          ],
+          "end_center": [
+            335,
+            459
+          ]
+        }
+      ],
+      "total_look_duration_ms": 834,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 47,
+      "exposure": {
+        "start_ms": 12612,
+        "end_ms": 17483
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "female"
+    },
+    {
+      "track_id": 48,
+      "exposure": {
+        "start_ms": 13013,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 19352,
+          "end_ms": 19919,
+          "start_center": [
+            501,
+            223
+          ],
+          "end_center": [
+            524,
+            248
+          ]
+        }
+      ],
+      "total_look_duration_ms": 567,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 49,
+      "exposure": {
+        "start_ms": 13480,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 16082,
+          "end_ms": 16916,
+          "start_center": [
+            157,
+            596
+          ],
+          "end_center": [
+            227,
+            599
+          ]
+        },
+        {
+          "start_ms": 17817,
+          "end_ms": 19319,
+          "start_center": [
+            340,
+            590
+          ],
+          "end_center": [
+            446,
+            568
+          ]
+        }
+      ],
+      "total_look_duration_ms": 2336,
+      "age_group": "30-39",
+      "gender": "male"
+    },
+    {
+      "track_id": 50,
+      "exposure": {
+        "start_ms": 13880,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "40-49",
+      "gender": "female"
+    },
+    {
+      "track_id": 51,
+      "exposure": {
+        "start_ms": 14381,
+        "end_ms": 19519
+      },
+      "look_times": [
+        {
+          "start_ms": 14647,
+          "end_ms": 15548,
+          "start_center": [
+            246,
+            126
+          ],
+          "end_center": [
+            308,
+            140
+          ]
+        }
+      ],
+      "total_look_duration_ms": 901,
+      "age_group": "unknown",
+      "gender": "female"
+    },
+    {
+      "track_id": 53,
+      "exposure": {
+        "start_ms": 14948,
+        "end_ms": 18885
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 54,
+      "exposure": {
+        "start_ms": 14981,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "40-49",
+      "gender": "male"
+    },
+    {
+      "track_id": 55,
+      "exposure": {
+        "start_ms": 15115,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 56,
+      "exposure": {
+        "start_ms": 15548,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 57,
+      "exposure": {
+        "start_ms": 15915,
+        "end_ms": 19285
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 58,
+      "exposure": {
+        "start_ms": 16282,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    },
+    {
+      "track_id": 60,
+      "exposure": {
+        "start_ms": 17751,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "male"
+    },
+    {
+      "track_id": 61,
+      "exposure": {
+        "start_ms": 18084,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 18084,
+          "end_ms": 18685,
+          "start_center": [
+            602,
+            686
+          ],
+          "end_center": [
+            641,
+            684
+          ]
+        }
+      ],
+      "total_look_duration_ms": 601,
+      "age_group": "unknown",
+      "gender": "female"
+    },
+    {
+      "track_id": 62,
+      "exposure": {
+        "start_ms": 18952,
+        "end_ms": 19018
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": null,
+      "gender": null
+    },
+    {
+      "track_id": 63,
+      "exposure": {
+        "start_ms": 19019,
+        "end_ms": 20053
+      },
+      "look_times": [
+        {
+          "start_ms": 19452,
+          "end_ms": 20000,
+          "start_center": [
+            39,
+            668
+          ],
+          "end_center": [
+            39,
+            668
+          ]
+        }
+      ],
+      "total_look_duration_ms": 548,
+      "age_group": "60+",
+      "gender": "male"
+    },
+    {
+      "track_id": 64,
+      "exposure": {
+        "start_ms": 19052,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "30-39",
+      "gender": "male"
+    },
+    {
+      "track_id": 65,
+      "exposure": {
+        "start_ms": 19185,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": null,
+      "gender": null
+    },
+    {
+      "track_id": 66,
+      "exposure": {
+        "start_ms": 19386,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "male"
+    },
+    {
+      "track_id": 67,
+      "exposure": {
+        "start_ms": 19686,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "unknown",
+      "gender": "female"
+    },
+    {
+      "track_id": 68,
+      "exposure": {
+        "start_ms": 19919,
+        "end_ms": 20053
+      },
+      "look_times": [],
+      "total_look_duration_ms": 0,
+      "age_group": "20-29",
+      "gender": "female"
+    }
+  ]
+}
