@@ -39,6 +39,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from models import EventRaw, DailyAgg, HourlyAgg, CampaignAgg
+from analysis.golden_zone import run_golden_zone, save_golden_zone
 
 logger = logging.getLogger(__name__)
 
@@ -302,6 +303,62 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
     logger.info(f"[CampaignAgg] 집계 완료 | 그룹 수={len(groups)}")
 
 
+def run_dbscan_aggregation(db: Session) -> None:
+    """
+    모든 활성 기기×캠페인 조합에 대해 DBSCAN 골든존 분석을 실행하고
+    결과를 dbscan_aggs에 저장합니다.
+    look_times가 있는 전체 기간 데이터를 대상으로 계산합니다.
+    """
+    logger.info("[DbscanAgg] 집계 시작")
+
+    # look_times가 있는 (device_id, campaign_id) 조합 전체 조회
+    pairs = (
+        db.query(EventRaw.device_id, EventRaw.campaign_id)
+        .filter(func.jsonb_array_length(EventRaw.look_times) > 0)
+        .distinct()
+        .all()
+    )
+
+    if not pairs:
+        logger.info("[DbscanAgg] look_times 데이터 없음 — 건너뜀")
+        return
+
+    for device_id, campaign_id in pairs:
+        rows = (
+            db.query(EventRaw)
+            .filter(
+                EventRaw.device_id   == device_id,
+                EventRaw.campaign_id == campaign_id,
+                func.jsonb_array_length(EventRaw.look_times) > 0,
+            )
+            .all()
+        )
+
+        result = run_golden_zone(rows=rows, eps=50.0, min_samples=3, n_interp=5)
+
+        if result["status"] == "ok":
+            save_golden_zone(
+                result      = result,
+                campaign_id = campaign_id,
+                device_id   = device_id,
+                eps         = 50.0,
+                min_samples = 3,
+                n_interp    = 5,
+                db          = db,
+            )
+            logger.info(
+                f"[DbscanAgg] 저장 완료 | device={device_id} | campaign={campaign_id} "
+                f"| 클러스터={result['dbscan']['cluster_count']}"
+            )
+        else:
+            logger.info(
+                f"[DbscanAgg] 건너뜀 ({result['status']}) "
+                f"| device={device_id} | campaign={campaign_id}"
+            )
+
+    logger.info(f"[DbscanAgg] 집계 완료 | 처리한 조합={len(pairs)}")
+
+
 def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
     """
     daily + hourly + campaign 집계를 한 번에 실행합니다.
@@ -319,3 +376,4 @@ def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
     run_daily_aggregation(db, target_date)
     run_hourly_aggregation(db, target_date)
     run_campaign_aggregation(db)
+    run_dbscan_aggregation(db)

@@ -14,5 +14,8 @@ typing-inspection==0.4.2 # Python 3.11+에서 필요한 typing-inspection
 typing_extensions==4.15.0 # Python 3.11+에서 필요한 typing_extensions
 uvicorn==0.41.0 # ASGI 서버
 fpdf2==2.7.9  # PDF 생성 라이브러리
+numpy==1.26.4        # 수치 연산 (골든존 분석)
+scikit-learn==1.4.0  # DBSCAN 클러스터링 (골든존 분석)
+scipy==1.12.0        # Convex Hull (골든존 분석)
 pytest==9.0.2 # 테스트 프레임워크
 httpx==0.28.1 # HTTP 클라이언트 라이브러리 (테스트용)

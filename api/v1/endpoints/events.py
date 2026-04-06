@@ -149,7 +149,12 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
             exposure_end_ms        = track.exposure.end_ms,
             exposure_ms            = track.exposure.exposure_ms,   # end - start
             look_times             = [
-                {"start_ms": lt.start_ms, "end_ms": lt.end_ms}
+                {
+                    "start_ms":     lt.start_ms,
+                    "end_ms":       lt.end_ms,
+                    "start_center": lt.start_center,
+                    "end_center":   lt.end_center,
+                }
                 for lt in track.look_times
             ],
             total_look_duration_ms = track.total_look_duration_ms,
