@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from datetime import datetime
 from typing import Optional, List
+from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
 
 
 # ── AI팀 JSON 내부 구조 ──────────────────────────────────────────────────────
@@ -113,6 +114,11 @@ class EventRawResponse(BaseModel):
     gender:                 Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", "device_id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
 
 
 class EventListResponse(BaseModel):

@@ -160,7 +160,7 @@ def run_daily_aggregation(db: Session, target_date: date | None = None) -> None:
 
     rows = (
         db.query(EventRaw)
-        .filter(func.date(EventRaw.ts) == target_date)
+        .filter(func.date(func.timezone('UTC', EventRaw.ts)) == target_date)
         .all()
     )
 
@@ -214,7 +214,7 @@ def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None
 
     rows = (
         db.query(EventRaw)
-        .filter(func.date(EventRaw.ts) == target_date)
+        .filter(func.date(func.timezone('UTC', EventRaw.ts)) == target_date)
         .all()
     )
 
