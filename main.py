@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from api.v1.endpoints import events, golden_zone
+from api.v1.endpoints import events, stats
 from database import get_db, create_tables
 from contextlib import asynccontextmanager
 
@@ -29,8 +29,7 @@ app = FastAPI(title="OAAS API", lifespan=lifespan)
 # 라우터 등록
 # events 파일 안에 정의된 모든 API를 포함시킴
 app.include_router(events.router,      prefix="/events",      tags=["events"])
-app.include_router(golden_zone.router, prefix="/golden-zone", tags=["golden-zone"])
-
+app.include_router(stats.router, prefix="/stats", tags=["stats"])
 
 # ── 헬스체크 ──────────────────────────────────────────────────────────────────
 
@@ -38,7 +37,6 @@ app.include_router(golden_zone.router, prefix="/golden-zone", tags=["golden-zone
 def read_root():
     """기본 헬스체크 — 서버가 살아있는지 확인합니다."""
     return {"status": "ok", "message": "OAAS 서버 정상 작동 중"}
-
 
 @app.get("/health", tags=["health"])
 def health_check(db: Session = Depends(get_db)):
@@ -59,3 +57,4 @@ def health_check(db: Session = Depends(get_db)):
         "status": "ok",
         "db":     "connected" if db_ok else "disconnected",
     }
+
