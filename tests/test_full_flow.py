@@ -15,9 +15,9 @@ import json
 import pytest
 from datetime import date
 from sqlalchemy import func
-
-from models import EventRaw, SegmentLog, DailyAgg, HourlyAgg
-from Aggregation import run_daily_aggregation, run_hourly_aggregation
+from models import EventRaw, SegmentLog, DailyAgg, HourlyAgg, CampaignAgg
+from Aggregation import run_daily_aggregation, run_hourly_aggregation, run_campaign_aggregation
+import models
 
 SEGMENTS_DIR = os.path.join(os.path.dirname(__file__), "segments")
 SEGMENT_FILES = [f"segment_{i:03d}.json" for i in range(10)]  # 000 ~ 009
@@ -206,3 +206,149 @@ class TestGetEvents:
         res = client.get("/events/?limit=3")
         assert res.status_code == 200
         assert len(res.json()["events"]) <= 3
+
+# ── 4단계: GET /stats/ 조회 테스트 ───────────────────────────────────────────
+
+class TestStats:
+
+    def _setup(self, client, db, seed):
+        """세그먼트 전송 + 집계 실행 헬퍼"""
+        send_all_segments(client, seed)
+        db.expire_all()
+        run_daily_aggregation(db, target_date=TARGET_DATE)
+        run_hourly_aggregation(db, target_date=TARGET_DATE)
+        from Aggregation import run_campaign_aggregation
+        run_campaign_aggregation(db)
+
+    # ── daily ─────────────────────────────────────────────────────────────────
+
+    def test_daily_전체_조회(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get("/stats/daily/")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_daily_device_id_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get(f"/stats/daily/?device_id={seed['device_id']}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_daily_campaign_id_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(f"/stats/daily/?campaign_id={campaign_id}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_daily_target_date_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get(f"/stats/daily/?target_date={TARGET_DATE}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_daily_날짜_범위_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get(f"/stats/daily/?start_date=2026-04-01&end_date=2026-04-30")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_daily_결과_없는_날짜(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get("/stats/daily/?target_date=2099-01-01")
+        assert res.status_code == 200
+        assert res.json()["total"] == 0
+
+    # ── hourly ────────────────────────────────────────────────────────────────
+
+    def test_hourly_전체_조회(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get("/stats/hourly/")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_hourly_device_id_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get(f"/stats/hourly/?device_id={seed['device_id']}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_hourly_campaign_id_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(f"/stats/hourly/?campaign_id={campaign_id}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_hourly_target_date_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get(f"/stats/hourly/?target_date={TARGET_DATE}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_hourly_결과_없는_날짜(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get("/stats/hourly/?target_date=2099-01-01")
+        assert res.status_code == 200
+        assert res.json()["total"] == 0
+
+    # ── campaign ──────────────────────────────────────────────────────────────
+
+    def test_campaign_전체_조회(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get("/stats/campaign/")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_campaign_device_id_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        res = client.get(f"/stats/campaign/?device_id={seed['device_id']}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    def test_campaign_campaign_id_필터(self, client, db, seed):
+        self._setup(client, db, seed)
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(f"/stats/campaign/?campaign_id={campaign_id}")
+        assert res.status_code == 200
+        assert res.json()["total"] > 0
+
+    # ── golden-zone ───────────────────────────────────────────────────────────
+
+    def test_golden_zone_데이터_없으면_404(self, client, db, seed):
+        """DbscanAgg 데이터 없을 때 404 반환"""
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(f"/stats/golden-zone/?campaign_id={campaign_id}&device_id={seed['device_id']}")
+        assert res.status_code == 404
+
+    def test_golden_zone_데이터_있으면_200(self, client, db, seed):
+        """DbscanAgg 데이터 직접 삽입 후 200 반환 및 응답 구조 확인"""
+        campaign_id = seed["campaign_ids"][0]
+
+        # DbscanAgg 테스트 데이터 직접 삽입
+        db.add(models.DbscanAgg(
+            campaign_id         = campaign_id,
+            device_id           = seed["device_id"],
+            eps                 = 30.0,
+            min_samples         = 5,
+            n_interp            = 10,
+            point_count         = 100,
+            event_count         = 50,
+            noise_count         = 5,
+            cluster_count       = 2,
+            cluster_label       = 0,
+            is_main             = True,
+            cluster_point_count = 80,
+            convex_hull         = {"vertices": [[0,0],[100,0],[100,100],[0,100]], "area_px2": 10000.0},
+            ellipse             = {"center": [50,50], "semi_axes": [50,50], "angle_deg": 0.0},
+        ))
+        db.commit()
+
+        res = client.get(f"/stats/golden-zone/?campaign_id={campaign_id}&device_id={seed['device_id']}")
+        assert res.status_code == 200
+
+        data = res.json()
+        assert "clusters" in data
+        assert len(data["clusters"]) > 0
+        assert "dbscan" in data
+        assert data["clusters"][0]["is_main"] is True

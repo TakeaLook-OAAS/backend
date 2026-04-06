@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict, computed_field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+
 
 
 # ── AI팀 JSON 내부 구조 ──────────────────────────────────────────────────────
@@ -124,3 +125,116 @@ class EventRawResponse(BaseModel):
 class EventListResponse(BaseModel):
     events: List[EventRawResponse]
     total:  int
+
+# ── GET /stats/ 응답 ──────────────────────────────────────────────────────────
+
+class AggBase(BaseModel):
+    """공통 집계 필드"""
+    exposure_count:           int
+    avg_dwell_time_ms:        float
+    interested_count:         int
+    attention_rate_tracks:    float
+    total_attention_time_ms:  float
+    attention_rate_times:     float
+    count_10s:                int
+    count_20s:                int
+    count_30s:                int
+    count_40s:                int
+    count_50s_plus:           int
+    count_60s_plus:           int
+    count_male:               int
+    count_female:             int
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v) if hasattr(v, 'hex') else v
+
+
+class DailyAggResponse(AggBase):
+    id:          int
+    date:        date
+    device_id:   str
+    campaign_id: str
+    created_at:  datetime
+    updated_at:  datetime
+
+    @field_validator("device_id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+
+class DailyAggListResponse(BaseModel):
+    results: List[DailyAggResponse]
+    total:   int
+
+
+class HourlyAggResponse(AggBase):
+    id:          int
+    hour:        datetime
+    device_id:   str
+    campaign_id: str
+    created_at:  datetime
+    updated_at:  datetime
+
+    @field_validator("device_id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+
+class HourlyAggListResponse(BaseModel):
+    results: List[HourlyAggResponse]
+    total:   int
+
+
+class CampaignAggResponse(AggBase):
+    id:          int
+    device_id:   str
+    campaign_id: str
+    created_at:  datetime
+    updated_at:  datetime
+
+    @field_validator("device_id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+
+class CampaignAggListResponse(BaseModel):
+    results: List[CampaignAggResponse]
+    total:   int
+
+
+class DbscanAggResponse(BaseModel):
+    id:                  int
+    campaign_id:         str
+    device_id:           str
+    computed_at:         datetime
+    eps:                 float
+    min_samples:         int
+    n_interp:            int
+    point_count:         int
+    event_count:         int
+    noise_count:         int
+    cluster_count:       int
+    cluster_label:       int
+    is_main:             bool
+    cluster_point_count: int
+    convex_hull:         Optional[dict]
+    ellipse:             Optional[dict]
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("device_id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+
+class DbscanAggListResponse(BaseModel):
+    results: List[DbscanAggResponse]
+    total:   int

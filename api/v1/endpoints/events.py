@@ -1,24 +1,3 @@
-# POST /events/ 요청 도착
-#         ↓
-# ① device_id UUID 형식 확인
-#         ↓
-# ② device_id가 DB에 있는지 확인 (없으면 401)
-#    기기가 ENABLE 상태인지 확인 (아니면 403)
-#         ↓
-# ③ device_id + cycle_index로 campaign_id 조회
-#    (없으면 404)
-#         ↓
-# ④ 배치 지연 감지
-#    ts와 서버 수신 시각 차이가 10분 초과면 경고 로그
-#         ↓
-# ⑤ segment_logs에 배치 메타데이터 1행 저장
-#         ↓
-# ⑥ events_raw에 track 단위로 저장
-#    track 1개 → 1행
-#    "unknown" age_group → None으로 변환
-#         ↓
-# ⑦ 응답 반환 {"inserted": N, "status": "success"}
-
 import logging
 import uuid
 from datetime import timedelta, datetime, timezone
@@ -119,13 +98,12 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
     ts_raw = event_in.segment.timestamp
     # naive datetime이면 UTC로 고정 (DB 세션 타임존 의존 방지)
     ts = ts_raw.replace(tzinfo=timezone.utc) if ts_raw.tzinfo is None else ts_raw
-    # !!! 테스트를 위해 배치 지연 로직을 잠시 주석처리함 !!!
-    # now = datetime.now(timezone.utc)
-    # diff = now - ts
-    # if diff > timedelta(minutes=BATCH_INTERVAL_MINUTES):
-    #     logger.warning(
-    #         "배치 지연 감지 | ts=%s | ingested_at≈%s | 지연=%s", ts, now, diff
-    #     )
+    now = datetime.now(timezone.utc)
+    diff = now - ts
+    if diff > timedelta(minutes=BATCH_INTERVAL_MINUTES):
+        logger.warning(
+            "배치 지연 감지 | ts=%s | ingested_at≈%s | 지연=%s", ts, now, diff
+        )
 
     # ⑥-a. segment_logs에 배치 메타데이터 저장
     segment_log = models.SegmentLog(
@@ -149,12 +127,7 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
             exposure_end_ms        = track.exposure.end_ms,
             exposure_ms            = track.exposure.exposure_ms,   # end - start
             look_times             = [
-                {
-                    "start_ms":     lt.start_ms,
-                    "end_ms":       lt.end_ms,
-                    "start_center": lt.start_center,
-                    "end_center":   lt.end_center,
-                }
+                {"start_ms": lt.start_ms, "end_ms": lt.end_ms}
                 for lt in track.look_times
             ],
             total_look_duration_ms = track.total_look_duration_ms,
