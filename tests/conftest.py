@@ -1,4 +1,18 @@
 """
+테스트 시작
+    ↓
+테스트용 DB(test_oaas) 생성
+    ↓
+테이블 생성
+    ↓
+테스트 데이터 삽입 (device, campaign, device_campaigns)
+    ↓
+테스트 실행
+    ↓
+테이블 TRUNCATE (다음 테스트를 위해 초기화)
+    ↓
+테스트 종료 후 테이블 DROP
+
 공용 pytest 픽스처 모음
 
 테스트용 PostgreSQL DB: test_oaas
@@ -7,7 +21,6 @@
   - 각 테스트 함수 종료 후 모든 테이블 TRUNCATE → 독립적인 테스트 보장
 """
 import sys, os
-# 프로젝트 루트를 경로에 추가 (database, models 등 임포트용)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import uuid
@@ -20,18 +33,15 @@ from fastapi.testclient import TestClient
 from models import Base, Device, Campaign, DeviceCampaign
 from enums import DeviceStatus, CampaignStatus
 
-# ── 테스트 DB 연결 정보 ────────────────────────────────────────────────────────
-# docker-compose의 PostgreSQL 컨테이너를 사용하되, 별도 DB(test_oaas)로 격리
-ADMIN_URL    = "postgresql://admin01:admin01@localhost:5432/postgres"   # DB 생성용
-TEST_DB_URL  = "postgresql://admin01:admin01@localhost:5432/test_oaas"  # 테스트용
+ADMIN_URL = os.getenv("TEST_ADMIN_DB_URL")
+TEST_DB_URL = os.getenv("TEST_DB_URL")
 
-
+# DB 접속 정보는 .env에서 로드
 # ── 세션 범위: 테스트 DB 생성 + 테이블 생성 ──────────────────────────────────
 
 @pytest.fixture(scope="session")
 def engine():
     """테스트 DB(test_oaas)를 생성하고 테이블을 만드는 세션 범위 픽스처."""
-    # test_oaas DB가 없으면 생성 (autocommit 모드 필요)
     admin_engine = create_engine(ADMIN_URL, isolation_level="AUTOCOMMIT")
     with admin_engine.connect() as conn:
         exists = conn.execute(
@@ -41,14 +51,12 @@ def engine():
             conn.execute(text("CREATE DATABASE test_oaas"))
     admin_engine.dispose()
 
-    # 테스트 엔진 생성 + 전체 테이블 생성
     test_engine = create_engine(TEST_DB_URL)
-    Base.metadata.drop_all(bind=test_engine)   # 이전 잔여 테이블 정리
+    Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
 
     yield test_engine
 
-    # 세션 종료 후 테이블 전부 삭제
     Base.metadata.drop_all(bind=test_engine)
     test_engine.dispose()
 
@@ -66,11 +74,10 @@ def db(engine) -> Session:
     yield session
     session.close()
 
-    # 의존성 순서대로 TRUNCATE (CASCADE로 한 번에)
     with engine.connect() as conn:
         conn.execute(text(
             "TRUNCATE TABLE "
-            "hourly_aggs, daily_aggs, events_raw, segment_logs, "
+            "campaign_aggs, hourly_aggs, daily_aggs, events_raw, segment_logs, "
             "device_campaigns, campaigns, devices, users "
             "RESTART IDENTITY CASCADE"
         ))
@@ -84,13 +91,14 @@ def seed(db) -> dict:
     """
     테스트에 필요한 기본 데이터를 삽입하고 ID를 반환.
 
+    세그먼트 파일의 cycle_index가 0, 1, 2 세 가지이므로
+    campaign 3개와 device_campaigns 3개를 등록합니다.
+
     반환 딕셔너리:
-        device_id   : UUID — ENABLE 상태의 기기
-        campaign_id : UUID — RUNNING 상태의 캠페인
-        cycle_index : int  — DeviceCampaign에 등록된 cycle_index (1)
+        device_id    : UUID — ENABLE 상태의 기기
+        campaign_ids : dict — {cycle_index: campaign_id}
     """
-    device_id   = uuid.uuid4()
-    campaign_id = uuid.uuid4()
+    device_id = uuid.uuid4()
 
     db.add(Device(
         id       = device_id,
@@ -98,21 +106,31 @@ def seed(db) -> dict:
         status   = DeviceStatus.ENABLE,
         timezone = "Asia/Seoul",
     ))
-    db.add(Campaign(
-        id         = campaign_id,
-        name       = "테스트 캠페인",
-        start_date = date(2026, 1, 1),
-        end_date   = date(2026, 12, 31),
-        status     = CampaignStatus.RUNNING,
-    ))
-    db.add(DeviceCampaign(
-        device_id   = device_id,
-        campaign_id = campaign_id,
-        cycle_index = 1,
-    ))
+
+    # cycle_index 0, 1, 2에 해당하는 캠페인 3개 등록
+    campaign_ids = {}
+    for cycle_index in range(3):
+        campaign_id = uuid.uuid4()
+        db.add(Campaign(
+            id         = campaign_id,
+            name       = f"테스트 캠페인 {cycle_index}",
+            start_date = date(2026, 1, 1),
+            end_date   = date(2026, 12, 31),
+            status     = CampaignStatus.RUNNING,
+        ))
+        db.add(DeviceCampaign(
+            device_id   = device_id,
+            campaign_id = campaign_id,
+            cycle_index = cycle_index,
+        ))
+        campaign_ids[cycle_index] = campaign_id
+
     db.commit()
 
-    return {"device_id": device_id, "campaign_id": campaign_id, "cycle_index": 1}
+    return {
+        "device_id":    device_id,
+        "campaign_ids": campaign_ids,  # {0: uuid, 1: uuid, 2: uuid}
+    }
 
 
 # ── FastAPI 테스트 클라이언트 ─────────────────────────────────────────────────
@@ -121,8 +139,6 @@ def seed(db) -> dict:
 def client(db) -> TestClient:
     """
     get_db 의존성을 테스트 세션으로 교체한 FastAPI TestClient.
-    seed 픽스처를 별도로 쓰려면 client 픽스처 안에서 쓰지 말고
-    테스트 함수에서 seed와 client를 함께 받으면 됨.
     """
     from main import app
     from database import get_db

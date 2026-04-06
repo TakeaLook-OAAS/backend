@@ -16,7 +16,7 @@ services:
       - db
     networks:
       - oaas-net
-  # db / portgresql
+  # db x/ portgresql
   db:
     image: postgres:15-alpine
     container_name: db

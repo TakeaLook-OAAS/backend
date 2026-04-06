@@ -2,13 +2,28 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from api.v1.endpoints import events
-from database import create_tables, get_db
+from database import get_db
+from contextlib import asynccontextmanager
 
-app = FastAPI(title = "OAAS - Offline Ad Analysis Service")
+# -------------------------------------------------------------------
+# [Lifespan 이벤트 핸들러 정의]
+# 서버가 켜질 때와 꺼질 때의 작업을 하나의 함수에서 안전하게 관리합니다.
+# -------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup (서버 시작 시점) ---
+    # yield 구문 이전에 작성된 코드는 서버가 요청을 받기 전에 실행됩니다.
+    # 예: DB 테이블 자동 생성 확인, 초기 데이터 로드 등
+    print("앱 구동 시작: 필요한 초기화 작업을 수행합니다.")
+    
+    yield  # 이 지점에서 서버가 구동되며 클라이언트의 요청을 받기 시작합니다.
+    
+    # --- Shutdown (서버 종료 시점) ---
+    # yield 구문 이후에 작성된 코드는 서버가 꺼질 때 실행됩니다.
+    # 예: 열려있는 DB 커넥션 풀 닫기, 임시 파일 삭제 등
+    print("앱 구동 종료: 리소스를 안전하게 정리합니다.")
 
-@app.on_event("startup")
-def startup() :
-    create_tables()
+app = FastAPI(title="OAAS API", lifespan=lifespan)
 
 # 라우터 등록
 # events 파일 안에 정의된 모든 API를 포함시킴

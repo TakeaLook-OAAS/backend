@@ -1,15 +1,18 @@
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.12.1
-click==8.3.1
-fastapi==0.135.1
-h11==0.16.0
-idna==3.11
-psycopg2-binary==2.9.11
-pydantic==2.12.5
-pydantic_core==2.41.5
-SQLAlchemy==2.0.48
-starlette==0.52.1
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-uvicorn==0.41.0
+annotated-doc==0.0.4 # Python 3.11+에서 필요한 annotated-doc
+annotated-types==0.7.0 # Python 3.11+에서 필요한 annotated-types
+anyio==4.12.1 # ASGI 서버
+click==8.3.1 # 명령줄 인터페이스 라이브러리
+fastapi==0.135.1 # Python 3.11+에서 FastAPI 프레임워크
+h11==0.16.0 # HTTP/1.1 프로토콜 구현 라이브러리
+idna==3.11 # HTTP URL 처리 라이브러리
+psycopg2-binary==2.9.11 # PostgreSQL 데이터베이스 드라이버
+pydantic==2.12.5 # FastAPI에서 사용하는 데이터 검증 라이브러리
+pydantic_core==2.41.5 # Pydantic의 핵심 라이브러리
+SQLAlchemy==2.0.48 # SQLAlchemy ORM 라이브러리
+starlette==0.52.1 # FastAPI의 ASGI 프레임워크
+typing-inspection==0.4.2 # Python 3.11+에서 필요한 typing-inspection
+typing_extensions==4.15.0 # Python 3.11+에서 필요한 typing_extensions
+uvicorn==0.41.0 # ASGI 서버
+fpdf2==2.7.9  # PDF 생성 라이브러리
+pytest==9.0.2 # 테스트 프레임워크
+httpx==0.28.1 # HTTP 클라이언트 라이브러리 (테스트용)
