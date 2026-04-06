@@ -172,6 +172,39 @@ class EventRaw(Base):
     campaign = relationship("Campaign", back_populates="events")
 
 
+# 4-1. DBSCAN 골든존 분석 결과 (캠페인 × 기기 단위, 1행 = 클러스터 1개)
+class DbscanAgg(Base):
+    __tablename__ = "dbscan_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    # DBSCAN 실행 파라미터 (같은 실행의 클러스터들은 동일값)
+    eps           = Column(Float,   nullable=False)
+    min_samples   = Column(Integer, nullable=False)
+    n_interp      = Column(Integer, nullable=False)
+
+    # 실행 단위 통계 (같은 실행의 클러스터들은 동일값)
+    point_count   = Column(Integer, nullable=False)  # 전체 보간 포인트 수
+    event_count   = Column(Integer, nullable=False)  # 사용된 events_raw 수
+    noise_count   = Column(Integer, nullable=False)  # 노이즈 포인트 수
+    cluster_count = Column(Integer, nullable=False)  # 전체 클러스터 수
+
+    # 클러스터 단위
+    cluster_label       = Column(Integer, nullable=False)
+    is_main             = Column(Boolean, nullable=False)  # 가장 큰 클러스터 여부
+    cluster_point_count = Column(Integer, nullable=False)
+    # convex_hull: {"vertices": [[x,y],...], "area_px2": float} | null
+    convex_hull = Column(JSONB, nullable=True)
+    # ellipse: {"center":[x,y], "semi_axes":[a,b], "angle_deg":float} | null
+    ellipse     = Column(JSONB, nullable=True)
+
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
+
+
 # 공통 집계 컬럼 Mixin
 # HourlyAgg, DailyAgg, CampaignAgg가 동일한 집계 컬럼을 공유
 class AggMixin:

@@ -1,8 +1,8 @@
 from fastapi import Depends, FastAPI
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from api.v1.endpoints import events
-from database import get_db
+from api.v1.endpoints import events, golden_zone
+from database import get_db, create_tables
 from contextlib import asynccontextmanager
 
 # -------------------------------------------------------------------
@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
     # yield 구문 이전에 작성된 코드는 서버가 요청을 받기 전에 실행됩니다.
     # 예: DB 테이블 자동 생성 확인, 초기 데이터 로드 등
     print("앱 구동 시작: 필요한 초기화 작업을 수행합니다.")
+    create_tables()
     
     yield  # 이 지점에서 서버가 구동되며 클라이언트의 요청을 받기 시작합니다.
     
@@ -27,7 +28,8 @@ app = FastAPI(title="OAAS API", lifespan=lifespan)
 
 # 라우터 등록
 # events 파일 안에 정의된 모든 API를 포함시킴
-app.include_router(events.router, prefix="/events", tags=["events"])
+app.include_router(events.router,      prefix="/events",      tags=["events"])
+app.include_router(golden_zone.router, prefix="/golden-zone", tags=["golden-zone"])
 
 
 # ── 헬스체크 ──────────────────────────────────────────────────────────────────
