@@ -157,7 +157,7 @@ def run_golden_zone(
             "detail":   "유효한 클러스터를 찾지 못했습니다. eps/min_samples를 조정해보세요.",
         }
 
-    main_label = max(unique_labels, key=lambda l: int((labels == l).sum()))
+    main_label = max(unique_labels, key=lambda label: int((labels == label).sum()))
 
     clusters = []
     for label in unique_labels:
