@@ -76,7 +76,7 @@ def get_hourly_aggs(
         if start_date:
             query = query.filter(models.HourlyAgg.hour >= start_date)
         if end_date:
-            query = query.filter(models.HourlyAgg.hour  < end_date)
+            query = query.filter(models.HourlyAgg.hour  < end_date + timedelta(days=1))
 
     rows = query.order_by(models.HourlyAgg.hour.desc()).limit(limit).all()
     return schemas.HourlyAggListResponse(results=rows, total=len(rows))
