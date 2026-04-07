@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 
 import numpy as np
 from sklearn.cluster import DBSCAN
-from scipy.spatial import ConvexHull, QhullError
 from sqlalchemy.orm import Session
 
 import models
@@ -46,48 +45,6 @@ def build_point_cloud(rows: list, n_interp: int) -> np.ndarray:
             ec = lt.get("end_center")
             points.extend(interpolate_look(sc, ec, n_interp))
     return np.array(points, dtype=float) if points else np.empty((0, 2))
-
-
-# ── Hull / Ellipse ─────────────────────────────────────────────────────────────
-
-def fit_convex_hull(pts: np.ndarray) -> dict | None:
-    """Convex Hull을 계산합니다. 점이 3개 미만이거나 일직선이면 None."""
-    if len(pts) < 3:
-        return None
-    try:
-        hull = ConvexHull(pts)
-        return {
-            "vertices": pts[hull.vertices].tolist(),  # [[x,y], ...] 시계방향
-            "area_px2": float(hull.volume),            # 2D에서 volume = 넓이
-        }
-    except QhullError:
-        return None
-
-
-def fit_ellipse(pts: np.ndarray) -> dict | None:
-    """
-    PCA 기반 타원 피팅.
-    semi_axes: 2-sigma 반축 길이 (픽셀), [긴 축, 짧은 축]
-    angle_deg: x축 기준 반시계 방향 (도)
-    """
-    if len(pts) < 5:
-        return None
-    center = pts.mean(axis=0)
-    cov = np.cov(pts.T)
-    eigenvalues, eigenvectors = np.linalg.eigh(cov)
-
-    order = eigenvalues.argsort()[::-1]
-    eigenvalues  = eigenvalues[order]
-    eigenvectors = eigenvectors[:, order]
-
-    semi_axes = (2 * np.sqrt(np.maximum(eigenvalues, 0))).tolist()
-    angle_deg = float(np.degrees(np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0])))
-
-    return {
-        "center":    center.tolist(),
-        "semi_axes": semi_axes,
-        "angle_deg": angle_deg,
-    }
 
 
 # ── DBSCAN 분석 ────────────────────────────────────────────────────────────────
@@ -157,17 +114,13 @@ def run_golden_zone(
             "detail":   "유효한 클러스터를 찾지 못했습니다. eps/min_samples를 조정해보세요.",
         }
 
-    main_label = max(unique_labels, key=lambda label: int((labels == label).sum()))
-
     clusters = []
     for label in unique_labels:
         cluster_pts = pts[labels == label]
         clusters.append({
             "label":       int(label),
             "point_count": int(len(cluster_pts)),
-            "is_main":     label == main_label,
-            "convex_hull": fit_convex_hull(cluster_pts),
-            "ellipse":     fit_ellipse(cluster_pts),
+            "points":      cluster_pts.tolist(),
         })
 
     clusters.sort(key=lambda c: c["point_count"], reverse=True)
@@ -227,10 +180,8 @@ def save_golden_zone(
             noise_count         = noise_count,
             cluster_count       = cluster_count,
             cluster_label       = c["label"],
-            is_main             = c["is_main"],
             cluster_point_count = c["point_count"],
-            convex_hull         = c["convex_hull"],
-            ellipse             = c["ellipse"],
+            points              = c["points"],
         )
         for c in result["clusters"]
     ]

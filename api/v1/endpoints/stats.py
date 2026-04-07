@@ -150,9 +150,7 @@ def get_golden_zone(
             {
                 "label":       row.cluster_label,
                 "point_count": row.cluster_point_count,
-                "is_main":     row.is_main,
-                "convex_hull": row.convex_hull,
-                "ellipse":     row.ellipse,
+                "points":      row.points,
             }
             for row in agg_rows
         ],
