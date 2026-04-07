@@ -209,32 +209,24 @@ class CampaignAggListResponse(BaseModel):
     total:   int
 
 
-class DbscanAggResponse(BaseModel):
-    id:                  int
-    campaign_id:         str
-    device_id:           str
-    computed_at:         datetime
-    eps:                 float
-    min_samples:         int
-    n_interp:            int
-    point_count:         int
-    event_count:         int
-    noise_count:         int
-    cluster_count:       int
-    cluster_label:       int
-    is_main:             bool
-    cluster_point_count: int
-    convex_hull:         Optional[dict]
-    ellipse:             Optional[dict]
-
-    model_config = ConfigDict(from_attributes=True)
-
-    @field_validator("device_id", "campaign_id", mode="before")
-    @classmethod
-    def uuid_to_str(cls, v):
-        return str(v)
+class DbscanInfo(BaseModel):
+    eps:           float
+    min_samples:   int
+    cluster_count: int
+    noise_count:   int
 
 
-class DbscanAggListResponse(BaseModel):
-    results: List[DbscanAggResponse]
-    total:   int
+class GoldenZoneCluster(BaseModel):
+    label:       int
+    point_count: int
+    points:      Optional[list] = None
+
+
+class GoldenZoneResponse(BaseModel):
+    campaign_id: str
+    device_id:   str
+    computed_at: datetime
+    point_count: int
+    event_count: int
+    dbscan:      DbscanInfo
+    clusters:    List[GoldenZoneCluster]

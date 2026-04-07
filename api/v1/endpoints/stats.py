@@ -109,6 +109,7 @@ def get_campaign_aggs(
 
 @router.get(
     "/golden-zone/",
+    response_model=schemas.GoldenZoneResponse,
     summary="골든존 조회",
     description=(
         "dbscan_aggs에 저장된 클러스터 결과를 반환합니다. "
@@ -134,24 +135,24 @@ def get_golden_zone(
         )
 
     first = agg_rows[0]
-    return {
-        "campaign_id":  str(campaign_id),
-        "device_id":    str(device_id),
-        "computed_at":  first.computed_at,
-        "point_count":  first.point_count,
-        "event_count":  first.event_count,
-        "dbscan": {
-            "eps":           first.eps,
-            "min_samples":   first.min_samples,
-            "cluster_count": first.cluster_count,
-            "noise_count":   first.noise_count,
-        },
-        "clusters": [
-            {
-                "label":       row.cluster_label,
-                "point_count": row.cluster_point_count,
-                "points":      row.points,
-            }
+    return schemas.GoldenZoneResponse(
+        campaign_id = str(campaign_id),
+        device_id   = str(device_id),
+        computed_at = first.computed_at,
+        point_count = first.point_count,
+        event_count = first.event_count,
+        dbscan      = schemas.DbscanInfo(
+            eps           = first.eps,
+            min_samples   = first.min_samples,
+            cluster_count = first.cluster_count,
+            noise_count   = first.noise_count,
+        ),
+        clusters = [
+            schemas.GoldenZoneCluster(
+                label       = row.cluster_label,
+                point_count = row.cluster_point_count,
+                points      = row.points,
+            )
             for row in agg_rows
         ],
-    }
+    )

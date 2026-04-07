@@ -337,10 +337,8 @@ class TestStats:
             noise_count         = 5,
             cluster_count       = 2,
             cluster_label       = 0,
-            is_main             = True,
             cluster_point_count = 80,
-            convex_hull         = {"vertices": [[0,0],[100,0],[100,100],[0,100]], "area_px2": 10000.0},
-            ellipse             = {"center": [50,50], "semi_axes": [50,50], "angle_deg": 0.0},
+            points              = [[10, 20], [30, 40], [50, 60]],
         ))
         db.commit()
 
@@ -351,4 +349,4 @@ class TestStats:
         assert "clusters" in data
         assert len(data["clusters"]) > 0
         assert "dbscan" in data
-        assert data["clusters"][0]["is_main"] is True
+        assert data["clusters"][0]["points"] is not None
