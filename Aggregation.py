@@ -360,6 +360,7 @@ def run_dbscan_aggregation(db: Session) -> None:
 
 
 def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
+    # noqa: E501 — 아래 docstring의 실행 예시는 python -m Aggregation 으로도 가능
     """
     daily + hourly + campaign 집계를 한 번에 실행합니다.
     APScheduler가 매일 자정에 이 함수를 호출합니다.
@@ -377,3 +378,33 @@ def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
     run_hourly_aggregation(db, target_date)
     run_campaign_aggregation(db)
     run_dbscan_aggregation(db)
+
+
+if __name__ == "__main__":
+    import sys
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+    # 인자로 날짜 지정 가능: python -m Aggregation 2026-04-05
+    # 인자 없으면 어제 날짜 자동 사용
+    target: date | None = None
+    if len(sys.argv) > 1:
+        try:
+            target = date.fromisoformat(sys.argv[1])
+            print(f"집계 대상 날짜: {target}")
+        except ValueError:
+            print(f"날짜 형식 오류: {sys.argv[1]} (예: 2026-04-05)")
+            sys.exit(1)
+    else:
+        from datetime import datetime, timezone, timedelta
+        target = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+        print(f"날짜 미지정 → 어제 날짜 사용: {target}")
+
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        run_all_aggregations(db, target_date=target)
+        print("집계 완료")
+    finally:
+        db.close()

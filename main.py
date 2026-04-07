@@ -1,4 +1,5 @@
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from api.v1.endpoints import events, stats
@@ -25,6 +26,13 @@ async def lifespan(app: FastAPI):
     print("앱 구동 종료: 리소스를 안전하게 정리합니다.")
 
 app = FastAPI(title="OAAS API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # 라우터 등록
 # events 파일 안에 정의된 모든 API를 포함시킴
