@@ -334,15 +334,15 @@ def run_dbscan_aggregation(db: Session) -> None:
             .all()
         )
 
-        result = run_golden_zone(rows=rows, eps=50.0, min_samples=3, n_interp=5)
+        result = run_golden_zone(rows=rows, eps=100.0, min_samples=10, n_interp=5)
 
         if result["status"] == "ok":
             save_golden_zone(
                 result      = result,
                 campaign_id = campaign_id,
                 device_id   = device_id,
-                eps         = 50.0,
-                min_samples = 3,
+                eps         = 100.0,
+                min_samples = 10,
                 n_interp    = 5,
                 db          = db,
             )

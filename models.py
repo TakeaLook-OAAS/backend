@@ -194,12 +194,9 @@ class DbscanAgg(Base):
 
     # 클러스터 단위
     cluster_label       = Column(Integer, nullable=False)
-    is_main             = Column(Boolean, nullable=False)  # 가장 큰 클러스터 여부
     cluster_point_count = Column(Integer, nullable=False)
-    # convex_hull: {"vertices": [[x,y],...], "area_px2": float} | null
-    convex_hull = Column(JSONB, nullable=True)
-    # ellipse: {"center":[x,y], "semi_axes":[a,b], "angle_deg":float} | null
-    ellipse     = Column(JSONB, nullable=True)
+    # points: [[x,y], ...] 보간된 포인트 전체 (프론트 scatter plot용)
+    points      = Column(JSONB, nullable=True)
 
     device   = relationship("Device")
     campaign = relationship("Campaign")
