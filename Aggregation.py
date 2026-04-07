@@ -155,13 +155,13 @@ def run_daily_aggregation(db: Session, target_date: date | None = None) -> None:
     target_date가 None이면 어제 날짜를 자동으로 사용합니다.
     """
     if target_date is None:
-        target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+        target_date = (datetime.now(timezone(timedelta(hours=9))) - timedelta(days=1)).date()
 
     logger.info(f"[DailyAgg] 집계 시작 | date={target_date}")
 
     rows = (
         db.query(EventRaw)
-        .filter(func.date(func.timezone('UTC', EventRaw.ts)) == target_date)
+        .filter(func.date(func.timezone('Asia/Seoul', EventRaw.ts)) == target_date)
         .all()
     )
 
@@ -209,13 +209,13 @@ def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None
     target_date가 None이면 어제 날짜를 자동으로 사용합니다.
     """
     if target_date is None:
-        target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+        target_date = (datetime.now(timezone(timedelta(hours=9))) - timedelta(days=1)).date()
 
     logger.info(f"[HourlyAgg] 집계 시작 | date={target_date}")
 
     rows = (
         db.query(EventRaw)
-        .filter(func.date(func.timezone('UTC', EventRaw.ts)) == target_date)
+        .filter(func.date(func.timezone('Asia/Seoul', EventRaw.ts)) == target_date)
         .all()
     )
 
@@ -225,7 +225,7 @@ def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None
 
     groups: dict[tuple, list[EventRaw]] = {}
     for row in rows:
-        # ts의 분/초를 버리고 시간 단위 버킷화 (14:35 → 14:00)
+        # ts의 분/초를 버리고 시간 단위 버킷화 (14:35 → 14:00), KST 기준
         hour_bucket = row.ts.replace(minute=0, second=0, microsecond=0)
         key = (row.device_id, row.campaign_id, hour_bucket)
         groups.setdefault(key, []).append(row)
@@ -398,8 +398,9 @@ if __name__ == "__main__":
             sys.exit(1)
     else:
         from datetime import datetime, timezone, timedelta
-        target = (datetime.now(timezone.utc) - timedelta(days=1)).date()
-        print(f"날짜 미지정 → 어제 날짜 사용: {target}")
+        KST = timezone(timedelta(hours=9))
+        target = (datetime.now(KST) - timedelta(days=1)).date()
+        print(f"날짜 미지정 → 어제 날짜 사용 (KST): {target}")
 
     from database import SessionLocal
     db = SessionLocal()
