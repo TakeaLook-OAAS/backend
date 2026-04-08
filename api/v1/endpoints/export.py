@@ -29,9 +29,10 @@ def export_events_csv(
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date는 start_date 이후여야 합니다.")
 
-    # UTC 기준 datetime 범위로 변환
-    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
-    end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=timezone.utc) + timedelta(days=1)
+    # KST 기준 datetime 범위로 변환 (시스템 기준시 KST)
+    KST = timezone(timedelta(hours=9))
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+    end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=KST) + timedelta(days=1)
 
     query = (
         db.query(models.EventRaw)
@@ -76,7 +77,7 @@ def export_events_csv(
                 row.exposure_end_ms,
                 row.exposure_ms,
                 row.total_look_duration_ms,
-                row.age_group or "",
+                (row.age_group or "").replace("-", "~"),  # Excel 날짜 자동변환 방지 (10-19 → 10~19)
                 row.gender or "",
             ])
             yield output.getvalue()
