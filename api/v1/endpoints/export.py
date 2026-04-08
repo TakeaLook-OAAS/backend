@@ -1,13 +1,10 @@
-# api/v1/endpoints/export.py
-
 import uuid
 import csv
 import io
-from datetime import date, timedelta
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import date, datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from typing import Optional
 
 from database import get_db
@@ -32,56 +29,62 @@ def export_events_csv(
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date는 start_date 이후여야 합니다.")
 
+    # UTC 기준 datetime 범위로 변환
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+    end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=timezone.utc) + timedelta(days=1)
+
     query = (
         db.query(models.EventRaw)
         .filter(
             models.EventRaw.campaign_id == campaign_id,
-            func.date(func.timezone('UTC', models.EventRaw.ts)) >= start_date,
-            func.date(func.timezone('UTC', models.EventRaw.ts)) <= end_date,
+            models.EventRaw.ts >= start_dt,
+            models.EventRaw.ts <  end_dt,
         )
     )
 
     if device_id:
         query = query.filter(models.EventRaw.device_id == device_id)
 
-    rows = query.order_by(models.EventRaw.ts.asc()).all()
+    query = query.order_by(models.EventRaw.ts.asc())
 
-    if not rows:
+    # 데이터 존재 여부 먼저 확인
+    if not db.query(query.exists()).scalar():
         raise HTTPException(status_code=404, detail="해당 조건의 데이터가 없습니다.")
 
-    # CSV 생성
-    output = io.StringIO()
-    writer = csv.writer(output)
-
-    # 헤더
-    writer.writerow([
-        "id", "ts", "device_id", "campaign_id", "track_id",
-        "exposure_start_ms", "exposure_end_ms", "exposure_ms",
-        "total_look_duration_ms", "age_group", "gender",
-    ])
-
-    # 데이터 행
-    for row in rows:
+    def generate():
+        # 헤더
+        output = io.StringIO()
+        writer = csv.writer(output)
         writer.writerow([
-            str(row.id),
-            row.ts.isoformat(),
-            str(row.device_id),
-            str(row.campaign_id),
-            row.track_id,
-            row.exposure_start_ms,
-            row.exposure_end_ms,
-            row.exposure_ms,
-            row.total_look_duration_ms,
-            row.age_group or "",
-            row.gender or "",
+            "id", "ts", "device_id", "campaign_id", "track_id",
+            "exposure_start_ms", "exposure_end_ms", "exposure_ms",
+            "total_look_duration_ms", "age_group", "gender",
         ])
+        yield output.getvalue()
 
-    output.seek(0)
+        # 1000행씩 청크 스트리밍
+        for row in query.yield_per(1000):
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([
+                str(row.id),
+                row.ts.isoformat(),
+                str(row.device_id),
+                str(row.campaign_id),
+                row.track_id,
+                row.exposure_start_ms,
+                row.exposure_end_ms,
+                row.exposure_ms,
+                row.total_look_duration_ms,
+                row.age_group or "",
+                row.gender or "",
+            ])
+            yield output.getvalue()
 
     filename = f"events_{start_date}_{end_date}.csv"
 
     return StreamingResponse(
-        iter([output.getvalue()]),
+        generate(),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
