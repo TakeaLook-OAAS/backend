@@ -209,6 +209,14 @@ class CampaignAggListResponse(BaseModel):
     total:   int
 
 
+class BoxStatsResponse(AggBase):
+    campaign_id:    str
+    device_id:      str
+    matched_tracks: int
+
+    model_config = ConfigDict(from_attributes=False)
+
+
 class DbscanInfo(BaseModel):
     eps:           float
     min_samples:   int
