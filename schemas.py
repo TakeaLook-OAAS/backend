@@ -4,7 +4,6 @@ from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
 
 
-
 # ── AI팀 JSON 내부 구조 ──────────────────────────────────────────────────────
 
 class SegmentData(BaseModel):
@@ -238,3 +237,40 @@ class GoldenZoneResponse(BaseModel):
     event_count: int
     dbscan:      DbscanInfo
     clusters:    List[GoldenZoneCluster]
+
+
+# ── 인증 ─────────────────────────────────────────────────────────────────────
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type:   str = "bearer"
+
+
+class SendCodeRequest(BaseModel):
+    email: str
+
+
+class UserCreate(BaseModel):
+    email:    str
+    password: str
+    code:     str
+
+
+class UserResponse(BaseModel):
+    id:         str
+    email:      str
+    role:       str
+    is_active:  bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def role_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v

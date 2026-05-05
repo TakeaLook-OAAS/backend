@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from api.v1.endpoints import events, stats
+from api.v1.endpoints import events, stats, auth
 from database import get_db, create_tables
 from contextlib import asynccontextmanager
 from api.v1.endpoints import export
@@ -37,9 +37,10 @@ app.add_middleware(
 
 # 라우터 등록
 # events 파일 안에 정의된 모든 API를 포함시킴
+app.include_router(auth.router,        prefix="/auth",        tags=["auth"])
 app.include_router(events.router,      prefix="/events",      tags=["events"])
-app.include_router(stats.router, prefix="/stats", tags=["stats"])
-app.include_router(export.router, prefix="/export", tags=["export"])
+app.include_router(stats.router,       prefix="/stats",       tags=["stats"])
+app.include_router(export.router,      prefix="/export",      tags=["export"])
 
 # ── 헬스체크 ──────────────────────────────────────────────────────────────────
 

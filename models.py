@@ -18,6 +18,26 @@ from enums import DeviceStatus, CampaignStatus, UserRole
 Base = declarative_base()
 
 
+# 0-0. 이메일 인증 코드
+class EmailVerification(Base):
+    __tablename__ = "email_verifications"
+
+    id         = Column(BigInteger, primary_key=True, autoincrement=True)
+    email      = Column(String(255), nullable=False, index=True)
+    code       = Column(String(6),   nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_used    = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# 0-1. 로그아웃된 토큰 블랙리스트
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+
+    jti        = Column(String(36), primary_key=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 # 0. 유저 (로그인)
 class User(Base):
     __tablename__ = "users"
@@ -67,17 +87,17 @@ class Campaign(Base):
     target_gender    = Column(String(10), nullable=True)   # "male" / "female"
 
     __table_args__ = (
-    CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
-    CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
-    CheckConstraint(
-        "target_age_group IN ('10-19', '20-29', '30-39', '40-49', '50-59', '60+') OR target_age_group IS NULL",
-        name="chk_campaign_target_age_group"
-    ),
-    CheckConstraint(
-        "target_gender IN ('male', 'female') OR target_gender IS NULL",
-        name="chk_campaign_target_gender"
-    ),
-)
+        CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
+        CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
+        CheckConstraint(
+            "target_age_group IN ('10-19', '20-29', '30-39', '40-49', '50-59', '60+') OR target_age_group IS NULL",
+            name="chk_campaign_target_age_group"
+        ),
+        CheckConstraint(
+            "target_gender IN ('male', 'female') OR target_gender IS NULL",
+            name="chk_campaign_target_gender"
+        ),
+    )
 
     events           = relationship("EventRaw", back_populates="campaign")
     device_campaigns = relationship("DeviceCampaign", back_populates="campaign", cascade="all, delete-orphan")
