@@ -30,6 +30,26 @@ from enums import DeviceStatus, CampaignStatus, UserRole
 Base = declarative_base()
 
 
+# 0-0. 이메일 인증 코드
+class EmailVerification(Base):
+    __tablename__ = "email_verifications"
+
+    id         = Column(BigInteger, primary_key=True, autoincrement=True)
+    email      = Column(String(255), nullable=False, index=True)
+    code       = Column(String(6),   nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_used    = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+# 0-1. 로그아웃된 토큰 블랙리스트
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+
+    jti        = Column(String(36), primary_key=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 # 0. 유저 (로그인)
 class User(Base):
     __tablename__ = "users"

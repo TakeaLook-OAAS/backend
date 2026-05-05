@@ -3,7 +3,9 @@ name: oaas
 services:
   #env_file 옵션
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: DockerFile
     container_name: back_dev
     env_file:
       - .env # ← Docker가 직접 주입
