@@ -1,85 +1,101 @@
 import uuid
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import date, timedelta
 from database import get_db
 import models, schemas
+from aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
+from analysis.golden_zone import run_golden_zone
 
 router = APIRouter()
 
-
-# ── GET /stats/daily/ ─────────────────────────────────────────────────────────
-
-@router.get(
-    "/daily/",
-    response_model=schemas.DailyAggListResponse,
-    summary="일별 집계 조회",
-)
-def get_daily_aggs(
-    device_id:   Optional[uuid.UUID] = None,
-    campaign_id: Optional[uuid.UUID] = None,
-    start_date:  Optional[date]      = None,
-    end_date:    Optional[date]      = None,
-    target_date: Optional[date]      = None,  # 특정 날짜
-    limit:       int = Query(default=100, ge=1, le=1000),
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.DailyAgg)
-
-    if device_id:
-        query = query.filter(models.DailyAgg.device_id == device_id)
-    if campaign_id:
-        query = query.filter(models.DailyAgg.campaign_id == campaign_id)
-    if target_date:
-        query = query.filter(models.DailyAgg.date == target_date)
-    else:
-        if start_date:
-            query = query.filter(models.DailyAgg.date >= start_date)
-        if end_date:
-            query = query.filter(models.DailyAgg.date <= end_date)
-
-    rows = query.order_by(models.DailyAgg.date.desc()).limit(limit).all()
-    return schemas.DailyAggListResponse(results=rows, total=len(rows))
+SCREEN_W = 1280.0
+SCREEN_H = 720.0
+KST = timezone(timedelta(hours=9))
 
 
-# ── GET /stats/hourly/ ────────────────────────────────────────────────────────
+def _empty_box_counts() -> dict:
+    return {
+        "exposure_count": 0, "avg_dwell_time_ms": 0.0, "interested_count": 0,
+        "attention_rate_tracks": 0.0, "total_attention_time_ms": 0.0,
+        "attention_rate_times": 0.0, "count_10s": 0, "count_20s": 0,
+        "count_30s": 0, "count_40s": 0, "count_50s_plus": 0,
+        "count_60s_plus": 0, "count_male": 0, "count_female": 0,
+    }
 
-@router.get(
-    "/hourly/",
-    response_model=schemas.HourlyAggListResponse,
-    summary="시간별 집계 조회",
-)
-def get_hourly_aggs(
-    device_id:   Optional[uuid.UUID] = None,
-    campaign_id: Optional[uuid.UUID] = None,
-    start_date:  Optional[date]      = None,
-    end_date:    Optional[date]      = None,
-    target_date: Optional[date]      = None,
-    limit:       int = Query(default=100, ge=1, le=1000),
-    db: Session = Depends(get_db),
-):
-    query = db.query(models.HourlyAgg)
 
-    if device_id:
-        query = query.filter(models.HourlyAgg.device_id == device_id)
-    if campaign_id:
-        query = query.filter(models.HourlyAgg.campaign_id == campaign_id)
-    if target_date:
-        query = query.filter(
-            models.HourlyAgg.hour >= target_date,
-            models.HourlyAgg.hour  < target_date + timedelta(days=1),
-        )
-    else:
-        if start_date:
-            query = query.filter(models.HourlyAgg.hour >= start_date)
-        if end_date:
-            query = query.filter(models.HourlyAgg.hour  < end_date + timedelta(days=1))
+# # ── GET /stats/daily/ ─────────────────────────────────────────────────────────
 
-    rows = query.order_by(models.HourlyAgg.hour.desc()).limit(limit).all()
-    return schemas.HourlyAggListResponse(results=rows, total=len(rows))
+# @router.get(
+#     "/daily/",
+#     response_model=schemas.DailyAggListResponse,
+#     summary="일별 집계 조회",
+# )
+# def get_daily_aggs(
+#     device_id:   Optional[uuid.UUID] = None,
+#     campaign_id: Optional[uuid.UUID] = None,
+#     start_date:  Optional[date]      = None,
+#     end_date:    Optional[date]      = None,
+#     target_date: Optional[date]      = None,  # 특정 날짜
+#     limit:       int = Query(default=100, ge=1, le=1000),
+#     db: Session = Depends(get_db),
+# ):
+#     query = db.query(models.DailyAgg)
+
+#     if device_id:
+#         query = query.filter(models.DailyAgg.device_id == device_id)
+#     if campaign_id:
+#         query = query.filter(models.DailyAgg.campaign_id == campaign_id)
+#     if target_date:
+#         query = query.filter(models.DailyAgg.date == target_date)
+#     else:
+#         if start_date:
+#             query = query.filter(models.DailyAgg.date >= start_date)
+#         if end_date:
+#             query = query.filter(models.DailyAgg.date <= end_date)
+
+#     rows = query.order_by(models.DailyAgg.date.desc()).limit(limit).all()
+#     return schemas.DailyAggListResponse(results=rows, total=len(rows))
+
+
+# # ── GET /stats/hourly/ ────────────────────────────────────────────────────────
+
+# @router.get(
+#     "/hourly/",
+#     response_model=schemas.HourlyAggListResponse,
+#     summary="시간별 집계 조회",
+# )
+# def get_hourly_aggs(
+#     device_id:   Optional[uuid.UUID] = None,
+#     campaign_id: Optional[uuid.UUID] = None,
+#     start_date:  Optional[date]      = None,
+#     end_date:    Optional[date]      = None,
+#     target_date: Optional[date]      = None,
+#     limit:       int = Query(default=100, ge=1, le=1000),
+#     db: Session = Depends(get_db),
+# ):
+#     query = db.query(models.HourlyAgg)
+
+#     if device_id:
+#         query = query.filter(models.HourlyAgg.device_id == device_id)
+#     if campaign_id:
+#         query = query.filter(models.HourlyAgg.campaign_id == campaign_id)
+#     if target_date:
+#         query = query.filter(
+#             models.HourlyAgg.hour >= target_date,
+#             models.HourlyAgg.hour  < target_date + timedelta(days=1),
+#         )
+#     else:
+#         if start_date:
+#             query = query.filter(models.HourlyAgg.hour >= start_date)
+#         if end_date:
+#             query = query.filter(models.HourlyAgg.hour  < end_date + timedelta(days=1))
+
+#     rows = query.order_by(models.HourlyAgg.hour.desc()).limit(limit).all()
+#     return schemas.HourlyAggListResponse(results=rows, total=len(rows))
 
 
 # ── GET /stats/campaign/ ──────────────────────────────────────────────────────
@@ -105,7 +121,59 @@ def get_campaign_aggs(
     rows = query.order_by(models.CampaignAgg.id.desc()).limit(limit).all()
     return schemas.CampaignAggListResponse(results=rows, total=len(rows))
 
-# --- DBSCAN ──────────────────────────────────────────────────────
+
+# ── GET /stats/box/ ───────────────────────────────────────────────────────────
+
+@router.get(
+    "/box/",
+    response_model=schemas.BoxStatsResponse,
+    summary="박스 필터 집계",
+)
+def get_box_stats(
+    campaign_id: uuid.UUID,
+    device_id:   uuid.UUID,
+    x_min: float = Query(..., ge=0.0, le=100.0),
+    y_min: float = Query(..., ge=0.0, le=100.0),
+    x_max: float = Query(..., ge=0.0, le=100.0),
+    y_max: float = Query(..., ge=0.0, le=100.0),
+    db: Session = Depends(get_db),
+):
+    px_x_min = (x_min / 100.0) * SCREEN_W
+    px_x_max = (x_max / 100.0) * SCREEN_W
+    px_y_min = (y_min / 100.0) * SCREEN_H
+    px_y_max = (y_max / 100.0) * SCREEN_H
+
+    all_rows = (
+        db.query(models.EventRaw)
+        .filter(
+            models.EventRaw.campaign_id == campaign_id,
+            models.EventRaw.device_id   == device_id,
+        )
+        .all()
+    )
+
+    def in_box(event) -> bool:
+        for lt in (event.look_times or []):
+            sc = lt.get("start_center")
+            ec = lt.get("end_center")
+            if sc and px_x_min <= sc[0] <= px_x_max and px_y_min <= sc[1] <= px_y_max:
+                return True
+            if ec and px_x_min <= ec[0] <= px_x_max and px_y_min <= ec[1] <= px_y_max:
+                return True
+        return False
+
+    filtered = [r for r in all_rows if in_box(r)]
+    counts   = _build_agg_counts(filtered) if filtered else _empty_box_counts()
+
+    return schemas.BoxStatsResponse(
+        campaign_id    = str(campaign_id),
+        device_id      = str(device_id),
+        matched_tracks = len(filtered),
+        **counts,
+    )
+
+
+# ── GET /stats/golden-zone/ ───────────────────────────────────────────────────
 
 @router.get(
     "/golden-zone/",
@@ -113,14 +181,105 @@ def get_campaign_aggs(
     summary="골든존 조회",
     description=(
         "dbscan_aggs에 저장된 클러스터 결과를 반환합니다. "
-        "매일 자정 run_all_aggregations()가 자동으로 갱신합니다."
+        "매일 자정 run_all_aggregations()가 자동으로 갱신합니다. "
+        "x_min/y_min/x_max/y_max (0-100%) 지정 시 해당 박스 안 포인트만 반환합니다."
     ),
 )
 def get_golden_zone(
     campaign_id: uuid.UUID,
     device_id:   uuid.UUID,
+    x_min: Optional[float] = None,
+    y_min: Optional[float] = None,
+    x_max: Optional[float] = None,
+    y_max: Optional[float] = None,
+    start_date: Optional[date] = None,
+    end_date:   Optional[date] = None,
     db: Session = Depends(get_db),
 ):
+    has_box = all(v is not None for v in [x_min, y_min, x_max, y_max])
+
+    def apply_box_filter(clusters_data: list, is_raw: bool) -> list:
+        if not has_box:
+            if is_raw:
+                return [
+                    schemas.GoldenZoneCluster(label=c["label"], point_count=c["point_count"], points=c["points"])
+                    for c in clusters_data
+                ]
+            return [
+                schemas.GoldenZoneCluster(label=row.cluster_label, point_count=row.cluster_point_count, points=row.points)
+                for row in clusters_data
+            ]
+
+        px_x_min = (x_min / 100.0) * SCREEN_W
+        px_x_max = (x_max / 100.0) * SCREEN_W
+        px_y_min = (y_min / 100.0) * SCREEN_H
+        px_y_max = (y_max / 100.0) * SCREEN_H
+
+        def in_box(p):
+            return px_x_min <= p[0] <= px_x_max and px_y_min <= p[1] <= px_y_max
+
+        if is_raw:
+            return [
+                schemas.GoldenZoneCluster(
+                    label=c["label"],
+                    points=[p for p in (c["points"] or []) if in_box(p)],
+                    point_count=len([p for p in (c["points"] or []) if in_box(p)]),
+                )
+                for c in clusters_data
+            ]
+        return [
+            schemas.GoldenZoneCluster(
+                label=row.cluster_label,
+                points=[p for p in (row.points or []) if in_box(p)],
+                point_count=len([p for p in (row.points or []) if in_box(p)]),
+            )
+            for row in clusters_data
+        ]
+
+    # 날짜 범위 지정: events_raw에서 직접 DBSCAN 실행
+    if start_date or end_date:
+        query = (
+            db.query(models.EventRaw)
+            .filter(
+                models.EventRaw.campaign_id == campaign_id,
+                models.EventRaw.device_id   == device_id,
+                func.jsonb_array_length(models.EventRaw.look_times) > 0,
+            )
+        )
+        if start_date:
+            start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+            query = query.filter(models.EventRaw.ts >= start_dt)
+        if end_date:
+            end_dt = datetime(end_date.year, end_date.month, end_date.day, tzinfo=KST) + timedelta(days=1)
+            query = query.filter(models.EventRaw.ts < end_dt)
+
+        rows = query.all()
+        if not rows:
+            raise HTTPException(status_code=404, detail="해당 기간에 look_times 데이터가 없습니다.")
+
+        result = run_golden_zone(rows=rows, eps=100.0, min_samples=10, n_interp=5)
+        if result["status"] != "ok":
+            raise HTTPException(
+                status_code=404,
+                detail=result.get("detail", f"클러스터를 찾을 수 없습니다: {result['status']}"),
+            )
+
+        return schemas.GoldenZoneResponse(
+            campaign_id = str(campaign_id),
+            device_id   = str(device_id),
+            computed_at = datetime.now(timezone.utc),
+            point_count = result["point_count"],
+            event_count = result["event_count"],
+            dbscan      = schemas.DbscanInfo(
+                eps           = 100.0,
+                min_samples   = 10,
+                cluster_count = result["dbscan"]["cluster_count"],
+                noise_count   = result["dbscan"]["noise_count"],
+            ),
+            clusters = apply_box_filter(result["clusters"], is_raw=True),
+        )
+
+    # 날짜 없음: dbscan_aggs 저장값 반환
     agg_rows = (
         db.query(models.DbscanAgg)
         .filter_by(campaign_id=campaign_id, device_id=device_id)
@@ -147,12 +306,115 @@ def get_golden_zone(
             cluster_count = first.cluster_count,
             noise_count   = first.noise_count,
         ),
-        clusters = [
-            schemas.GoldenZoneCluster(
-                label       = row.cluster_label,
-                point_count = row.cluster_point_count,
-                points      = row.points,
-            )
-            for row in agg_rows
-        ],
+        clusters = apply_box_filter(agg_rows, is_raw=False),
     )
+
+
+# ── GET /stats/range/ ─────────────────────────────────────────────────────────
+
+@router.get(
+    "/range/",
+    summary="기간별 집계 조회 (실시간 계산)",
+    description="기본 지표 + 고급 지표 + hourly/daily 추이를 한 번에 반환합니다.",
+)
+def get_range_stats(
+    start_date:  date,
+    end_date:    date,
+    device_id:   uuid.UUID,
+    campaign_id: uuid.UUID,
+    age_group:   Optional[str] = None,
+    gender:      Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    # 날짜 유효성 확인
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
+
+    # device_id + campaign_id 조합 유효성 확인
+    device_campaign = (
+        db.query(models.DeviceCampaign)
+        .filter_by(device_id=device_id, campaign_id=campaign_id)
+        .first()
+    )
+    if not device_campaign:
+        raise HTTPException(status_code=404, detail="등록되지 않은 device-campaign 조합입니다.")
+
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+
+    # 3번 수정: KST→UTC 변환 후 범위 비교 (인덱스 사용 가능)
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+    end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=KST) + timedelta(days=1)
+
+    query = (
+        db.query(models.EventRaw)
+        .filter(
+            models.EventRaw.device_id   == device_id,
+            models.EventRaw.campaign_id == campaign_id,
+            models.EventRaw.ts >= start_dt,
+            models.EventRaw.ts <  end_dt,
+        )
+    )
+
+    if age_group:
+        query = query.filter(models.EventRaw.age_group == age_group)
+    if gender:
+        query = query.filter(models.EventRaw.gender == gender)
+
+    rows = query.all()
+
+    # 데이터 없어도 200 반환
+    empty_summary = {
+        "exposure_count": 0, "avg_dwell_time_ms": 0.0, "interested_count": 0,
+        "attention_rate_tracks": 0.0, "total_attention_time_ms": 0.0,
+        "attention_rate_times": 0.0, "count_10s": 0, "count_20s": 0,
+        "count_30s": 0, "count_40s": 0, "count_50s_plus": 0,
+        "count_60s_plus": 0, "count_male": 0, "count_female": 0,
+    }
+    empty_advanced = {
+        "avg_revisit_count":       0.0,
+        "avg_fixation_latency_ms": None,
+        "viewability_score":       0.0,
+        "reactance_rate":          0.0,
+        "peak_hour":               None,
+        "target_match_rate":       None,
+    }
+
+    summary  = _build_agg_counts(rows)                    if rows else empty_summary
+    advanced = _build_advanced_agg_counts(rows, campaign) if rows else empty_advanced
+
+    # hourly_trend — 00~23시 24개 고정 (KST 기준)
+    hour_map: dict[int, dict] = {h: {"exposure_count": 0, "interested_count": 0} for h in range(24)}
+    for row in rows:
+        kst_hour = row.ts.astimezone(KST).hour
+        hour_map[kst_hour]["exposure_count"]  += 1
+        hour_map[kst_hour]["interested_count"] += 1 if row.look_times else 0
+
+    hourly_trend = [
+        {"hour": f"{h:02d}", **hour_map[h]}
+        for h in range(24)
+    ]
+
+    # daily_trend — 데이터 있는 날짜만, 오름차순
+    date_map: dict[str, dict] = {}
+    for row in rows:
+        kst_date = str(row.ts.astimezone(KST).date())
+        if kst_date not in date_map:
+            date_map[kst_date] = {"exposure_count": 0, "interested_count": 0}
+        date_map[kst_date]["exposure_count"]  += 1
+        date_map[kst_date]["interested_count"] += 1 if row.look_times else 0
+
+    daily_trend = [
+        {"date": d, **date_map[d]}
+        for d in sorted(date_map.keys())
+    ]
+
+    return {
+        "start_date":  str(start_date),
+        "end_date":    str(end_date),
+        "device_id":   str(device_id),
+        "campaign_id": str(campaign_id),
+        **summary,
+        **advanced,
+        "hourly_trend": hourly_trend,
+        "daily_trend":  daily_trend,
+    }

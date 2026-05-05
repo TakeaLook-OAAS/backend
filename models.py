@@ -1,30 +1,18 @@
 # 각 테이블 역할
 # devices — AI 기기 정보
-# 기기 이름, 상태(ENABLE/DISABLE), 타임존
 # campaigns — 광고 캠페인 정보
-# 광고명, 시작일, 종료일, 상태(DRAFT/RUNNING/PAUSED/ENDED)
 # device_campaigns — 기기와 캠페인 연결 (다대다)
-# device_id + campaign_id + cycle_index
-# → "이 기기에서 몇 번째 광고가 어떤 캠페인인지"
-# 예시:
-# 기기A + cycle_index=0 → 삼성 광고
-# 기기A + cycle_index=1 → 나이키 광고
-# 기기A + cycle_index=2 → 애플 광고
 # segment_logs — 배치 메타데이터
-# 배치가 언제 왔는지, roi_polygon이 뭔지
-# → 나중에 골든존 분석할 때 사용
 # events_raw — 원본 로그 (핵심 테이블)
-# track 1개 = 1행
-# 사람 1명의 노출 정보, 시선 정보, 나이대, 성별
-# daily_aggs / hourly_aggs / campaign_aggs — 집계 결과
-# events_raw를 날짜/시간/캠페인 단위로 집계한 결과
-# 프론트가 이 테이블에서 데이터를 가져감
-# sqlalchemy
+# campaign_aggs — 캠페인 전체 기간 기본 집계
+# campaign_advanced_aggs — 캠페인 전체 기간 고급 분석 집계
+# dbscan_aggs — 골든존 DBSCAN 분석 결과
+# [비활성화] daily_aggs / hourly_aggs — 실시간 ROI 통계 기능 추가로 대체 예정
+
 from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKey, CheckConstraint, UniqueConstraint, text, Enum, BigInteger, Boolean
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-# enum
 from enums import DeviceStatus, CampaignStatus, UserRole
 
 Base = declarative_base()
@@ -73,23 +61,13 @@ class Device(Base):
     timezone   = Column(String(32), nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
-    # rois             = relationship("ROI", back_populates="device", cascade="all, delete-orphan")  # ROI 비활성화
     events           = relationship("EventRaw", back_populates="device")
     device_campaigns = relationship("DeviceCampaign", back_populates="device", cascade="all, delete-orphan")
     segment_logs     = relationship("SegmentLog", back_populates="device")
 
 
 # 2. 관심 구역 (ROI) — 비활성화
-# class ROI(Base):
-#     __tablename__ = "rois"
-#     id         = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-#     device_id  = Column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
-#     name       = Column(String(50), nullable=False)
-#     polygon    = Column(JSONB, nullable=False)
-#     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-#     __table_args__ = (UniqueConstraint("device_id", "name", name="uq_roi_device_name"),)
-#     device = relationship("Device", back_populates="rois")
-#     events = relationship("EventRaw", back_populates="roi")
+# class ROI(Base): ...
 
 
 # 3. 광고 캠페인
@@ -104,10 +82,22 @@ class Campaign(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
+    # 타겟 인구통계 (타겟 오디언스 정합률 계산용, nullable — 설정 안 할 수도 있음)
+    target_age_group = Column(String(20), nullable=True)   # 예: "20-29"
+    target_gender    = Column(String(10), nullable=True)   # "male" / "female"
+
     __table_args__ = (
-        CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
-        CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
-    )
+    CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
+    CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
+    CheckConstraint(
+        "target_age_group IN ('10-19', '20-29', '30-39', '40-49', '50-59', '60+') OR target_age_group IS NULL",
+        name="chk_campaign_target_age_group"
+    ),
+    CheckConstraint(
+        "target_gender IN ('male', 'female') OR target_gender IS NULL",
+        name="chk_campaign_target_gender"
+    ),
+)
 
     events           = relationship("EventRaw", back_populates="campaign")
     device_campaigns = relationship("DeviceCampaign", back_populates="campaign", cascade="all, delete-orphan")
@@ -158,20 +148,22 @@ class EventRaw(Base):
     ingested_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="RESTRICT"), nullable=False)
-    # roi_id   = Column(UUID(as_uuid=True), ForeignKey("rois.id",      ondelete="RESTRICT"), nullable=False)  # ROI 비활성화
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="RESTRICT"), nullable=False)
 
     track_id          = Column(Integer, nullable=False)
     exposure_start_ms = Column(Integer, nullable=False)
     exposure_end_ms   = Column(Integer, nullable=False)
-    exposure_ms       = Column(Integer, nullable=False)  # end_ms - start_ms
+    exposure_ms       = Column(Integer, nullable=False)
 
     # look_times: start_center, end_center 좌표 포함 (골든존 분석용)
     # [{"start_ms": int, "end_ms": int, "start_center": [x,y], "end_center": [x,y]}]
     look_times             = Column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     total_look_duration_ms = Column(Integer, nullable=False, default=0)
 
-    # 인구통계 (nullable — AI가 분석 못할 수도 있음, "unknown"은 None으로 변환)
+    # 첫 주목 반응 시간 계산용 — AI팀에서 나중에 제공 예정, nullable
+    roi_entry_ms = Column(Integer, nullable=True)
+
+    # 인구통계
     age_group = Column(String(20), nullable=True)
     gender    = Column(String(10), nullable=True)
 
@@ -188,7 +180,6 @@ class EventRaw(Base):
     )
 
     device   = relationship("Device",   back_populates="events")
-    # roi   = relationship("ROI",      back_populates="events")  # ROI 비활성화
     campaign = relationship("Campaign", back_populates="events")
 
 
@@ -201,51 +192,39 @@ class DbscanAgg(Base):
     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
     computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
-    # DBSCAN 실행 파라미터 (같은 실행의 클러스터들은 동일값)
     eps           = Column(Float,   nullable=False)
     min_samples   = Column(Integer, nullable=False)
     n_interp      = Column(Integer, nullable=False)
 
-    # 실행 단위 통계 (같은 실행의 클러스터들은 동일값)
-    point_count   = Column(Integer, nullable=False)  # 전체 보간 포인트 수
-    event_count   = Column(Integer, nullable=False)  # 사용된 events_raw 수
-    noise_count   = Column(Integer, nullable=False)  # 노이즈 포인트 수
-    cluster_count = Column(Integer, nullable=False)  # 전체 클러스터 수
+    point_count   = Column(Integer, nullable=False)
+    event_count   = Column(Integer, nullable=False)
+    noise_count   = Column(Integer, nullable=False)
+    cluster_count = Column(Integer, nullable=False)
 
-    # 클러스터 단위
     cluster_label       = Column(Integer, nullable=False)
     cluster_point_count = Column(Integer, nullable=False)
-    # points: [[x,y], ...] 보간된 포인트 전체 (프론트 scatter plot용)
-    points      = Column(JSONB, nullable=True)
+    points              = Column(JSONB, nullable=True)
 
     device   = relationship("Device")
     campaign = relationship("Campaign")
 
 
-# 공통 집계 컬럼 Mixin
-# HourlyAgg, DailyAgg, CampaignAgg가 동일한 집계 컬럼을 공유
+# 공통 집계 컬럼 Mixin (CampaignAgg에서 사용)
 class AggMixin:
-    # 노출 인구
-    exposure_count        = Column(Integer, nullable=False, default=0)   # 전체 Track 수
+    exposure_count          = Column(Integer, nullable=False, default=0)
+    avg_dwell_time_ms       = Column(Float,   nullable=False, default=0.0)
+    interested_count        = Column(Integer, nullable=False, default=0)
+    attention_rate_tracks   = Column(Float,   nullable=False, default=0.0)
+    total_attention_time_ms = Column(Float,   nullable=False, default=0.0)
+    attention_rate_times    = Column(Float,   nullable=False, default=0.0)
 
-    # 체류 시간
-    avg_dwell_time_ms     = Column(Float,   nullable=False, default=0.0) # 총 체류시간 / 전체 Track 수
+    count_10s      = Column(Integer, nullable=False, default=0)
+    count_20s      = Column(Integer, nullable=False, default=0)
+    count_30s      = Column(Integer, nullable=False, default=0)
+    count_40s      = Column(Integer, nullable=False, default=0)
+    count_50s_plus = Column(Integer, nullable=False, default=0)
+    count_60s_plus = Column(Integer, nullable=False, default=0)
 
-    # 관심도 지표
-    interested_count      = Column(Integer, nullable=False, default=0)   # look_times 있는 Track 수
-    attention_rate_tracks = Column(Float,   nullable=False, default=0.0) # interested_count / exposure_count
-    total_attention_time_ms = Column(Float, nullable=False, default=0.0) # total_look_duration_ms 합계
-    attention_rate_times  = Column(Float,   nullable=False, default=0.0) # total_attention_time_ms / sum(exposure_ms)
-
-    # 나이대별 인원
-    count_10s      = Column(Integer, nullable=False, default=0)  # 10-19
-    count_20s      = Column(Integer, nullable=False, default=0)  # 20-29
-    count_30s      = Column(Integer, nullable=False, default=0)  # 30-39
-    count_40s      = Column(Integer, nullable=False, default=0)  # 40-49
-    count_50s_plus = Column(Integer, nullable=False, default=0)  # 50-59
-    count_60s_plus = Column(Integer, nullable=False, default=0)  # 60+
-
-    # 성별 인원
     count_male   = Column(Integer, nullable=False, default=0)
     count_female = Column(Integer, nullable=False, default=0)
 
@@ -253,45 +232,31 @@ class AggMixin:
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
 
-# 5. 시간 단위 통계 집계 (Hourly Aggregation)
-class HourlyAgg(AggMixin, Base):
-    __tablename__ = "hourly_aggs"
-
-    id          = Column(BigInteger, primary_key=True, autoincrement=True)
-    hour        = Column(DateTime(timezone=True), nullable=False)
-    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
-    # roi_id   = Column(UUID(as_uuid=True), ForeignKey("rois.id",      ondelete="CASCADE"), nullable=False)  # ROI 비활성화
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("hour", "device_id", "campaign_id", name="uq_hourly_agg"),
-    )
-
-    device   = relationship("Device")
-    # roi   = relationship("ROI")  # ROI 비활성화
-    campaign = relationship("Campaign")
+# 5. 시간 단위 통계 집계 — 비활성화 (실시간 ROI 통계 기능으로 대체 예정)
+# class HourlyAgg(AggMixin, Base):
+#     __tablename__ = "hourly_aggs"
+#     id          = Column(BigInteger, primary_key=True, autoincrement=True)
+#     hour        = Column(DateTime(timezone=True), nullable=False)
+#     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+#     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+#     __table_args__ = (UniqueConstraint("hour", "device_id", "campaign_id", name="uq_hourly_agg"),)
+#     device   = relationship("Device")
+#     campaign = relationship("Campaign")
 
 
-# 6. 일 단위 통계 집계 (Daily Aggregation)
-class DailyAgg(AggMixin, Base):
-    __tablename__ = "daily_aggs"
-
-    id          = Column(BigInteger, primary_key=True, autoincrement=True)
-    date        = Column(Date, nullable=False)
-    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
-    # roi_id   = Column(UUID(as_uuid=True), ForeignKey("rois.id",      ondelete="CASCADE"), nullable=False)  # ROI 비활성화
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("date", "device_id", "campaign_id", name="uq_daily_agg"),
-    )
-
-    device   = relationship("Device")
-    # roi   = relationship("ROI")  # ROI 비활성화
-    campaign = relationship("Campaign")
+# 6. 일 단위 통계 집계 — 비활성화 (실시간 ROI 통계 기능으로 대체 예정)
+# class DailyAgg(AggMixin, Base):
+#     __tablename__ = "daily_aggs"
+#     id          = Column(BigInteger, primary_key=True, autoincrement=True)
+#     date        = Column(Date, nullable=False)
+#     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+#     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+#     __table_args__ = (UniqueConstraint("date", "device_id", "campaign_id", name="uq_daily_agg"),)
+#     device   = relationship("Device")
+#     campaign = relationship("Campaign")
 
 
-# 7. 캠페인 전체 기간 집계 (Campaign Aggregation)
+# 7. 캠페인 전체 기간 기본 집계
 class CampaignAgg(AggMixin, Base):
     __tablename__ = "campaign_aggs"
 
@@ -301,6 +266,46 @@ class CampaignAgg(AggMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("device_id", "campaign_id", name="uq_campaign_agg"),
+    )
+
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
+
+
+# 8. 캠페인 전체 기간 고급 분석 집계
+class CampaignAdvancedAgg(Base):
+    __tablename__ = "campaign_advanced_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+
+    # 반복 시선 횟수 (Revisit Count) — len(look_times) per track 평균
+    avg_revisit_count    = Column(Float,   nullable=False, default=0.0)
+
+    # 첫 주목 반응 시간 (Fixation Latency) — AI팀 roi_entry_ms 데이터 필요, 나중에 채움
+    avg_fixation_latency_ms = Column(Float, nullable=True)
+
+    # 노출 대비 시청 효율 (Viewability Score)
+    # (interested_count / exposure_count) × avg_look_time_ms
+    viewability_score    = Column(Float,   nullable=False, default=0.0)
+
+    # 광고 거부 반응률 (Psychological Reactance)
+    # exposure_ms < 1000ms + look_times 비어있는 track 비율
+    reactance_rate       = Column(Float,   nullable=False, default=0.0)
+
+    # 피크 시간 (0~23시) — 가장 많은 exposure가 발생한 시간대
+    peak_hour            = Column(Integer, nullable=True)
+
+    # 타겟 오디언스 정합률 (Audience Segmentation)
+    # campaign.target_age_group / target_gender 기준
+    target_match_rate    = Column(Float,   nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("device_id", "campaign_id", name="uq_campaign_advanced_agg"),
     )
 
     device   = relationship("Device")
