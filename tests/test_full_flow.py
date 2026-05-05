@@ -99,7 +99,6 @@ class TestAggregation:
         assert db.query(CampaignAgg).count() > 0
 
     def test_campaign_agg_exposure_count(self, client, db, seed):
-        """CampaignAgg exposure_count 합계 = 전체 events_raw track 수"""
         send_all_segments(client, seed)
         db.expire_all()
         run_campaign_aggregation(db)
@@ -109,21 +108,20 @@ class TestAggregation:
         assert total_exposure == total_tracks
 
     def test_campaign_agg_interested_count(self, client, db, seed):
-        """CampaignAgg interested_count 합계 = look_times가 있는 track 수"""
         send_all_segments(client, seed)
         db.expire_all()
         run_campaign_aggregation(db)
 
+        # 5번 수정: jsonb_array_length 사용
         interested_in_db = (
             db.query(EventRaw)
-            .filter(EventRaw.look_times != [])
+            .filter(func.jsonb_array_length(EventRaw.look_times) > 0)
             .count()
         )
         total_interested = sum(agg.interested_count for agg in db.query(CampaignAgg).all())
         assert total_interested == interested_in_db
 
     def test_campaign_agg_attention_rate_tracks(self, client, db, seed):
-        """각 CampaignAgg의 attention_rate_tracks = interested_count / exposure_count"""
         send_all_segments(client, seed)
         db.expire_all()
         run_campaign_aggregation(db)
@@ -155,7 +153,6 @@ class TestAggregation:
         assert db.query(CampaignAdvancedAgg).count() > 0
 
     def test_advanced_agg_avg_revisit_count_양수(self, client, db, seed):
-        """avg_revisit_count는 0 이상이어야 함"""
         send_all_segments(client, seed)
         db.expire_all()
         run_advanced_aggregation(db)
@@ -164,7 +161,6 @@ class TestAggregation:
             assert agg.avg_revisit_count >= 0.0
 
     def test_advanced_agg_reactance_rate_범위(self, client, db, seed):
-        """reactance_rate는 0~1 사이여야 함"""
         send_all_segments(client, seed)
         db.expire_all()
         run_advanced_aggregation(db)
@@ -273,3 +269,44 @@ class TestStats:
         assert "clusters" in data
         assert len(data["clusters"]) > 0
         assert "dbscan" in data
+
+    # ── range ─────────────────────────────────────────────────────────────────
+
+    def test_range_정상_조회(self, client, db, seed):
+        send_all_segments(client, seed)
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(
+            f"/stats/range/?start_date=2026-04-01&end_date=2026-04-30"
+            f"&device_id={seed['device_id']}&campaign_id={campaign_id}"
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "exposure_count" in data
+        assert "hourly_trend" in data
+        assert "daily_trend" in data
+        assert len(data["hourly_trend"]) == 24
+
+    def test_range_데이터_없어도_200(self, client, db, seed):
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(
+            f"/stats/range/?start_date=2099-01-01&end_date=2099-01-31"
+            f"&device_id={seed['device_id']}&campaign_id={campaign_id}"
+        )
+        assert res.status_code == 200
+        assert res.json()["exposure_count"] == 0
+
+    def test_range_start_date_end_date_역전_400(self, client, db, seed):
+        campaign_id = seed["campaign_ids"][0]
+        res = client.get(
+            f"/stats/range/?start_date=2026-04-30&end_date=2026-04-01"
+            f"&device_id={seed['device_id']}&campaign_id={campaign_id}"
+        )
+        assert res.status_code == 400
+
+    def test_range_잘못된_device_campaign_조합_404(self, client, db, seed):
+        import uuid
+        res = client.get(
+            f"/stats/range/?start_date=2026-04-01&end_date=2026-04-30"
+            f"&device_id={seed['device_id']}&campaign_id={uuid.uuid4()}"
+        )
+        assert res.status_code == 404

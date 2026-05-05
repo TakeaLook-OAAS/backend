@@ -1,5 +1,8 @@
 import models
 from models import EventRaw
+from datetime import timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
 
 # ── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -89,10 +92,10 @@ def _build_advanced_agg_counts(rows: list[EventRaw], campaign: models.Campaign) 
     reactance_count = sum(1 for r in rows if r.exposure_ms < 1000 and not r.look_times)
     reactance_rate  = round(reactance_count / exposure_count, 4) if exposure_count > 0 else 0.0
 
-    # 피크 시간
+    # 1번 수정: peak_hour KST 기준으로 변경
     hour_counts: dict[int, int] = {}
     for r in rows:
-        h = r.ts.hour
+        h = r.ts.astimezone(KST).hour
         hour_counts[h] = hour_counts.get(h, 0) + 1
     peak_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
 
@@ -104,7 +107,8 @@ def _build_advanced_agg_counts(rows: list[EventRaw], campaign: models.Campaign) 
             if (campaign.target_age_group is None or r.age_group == campaign.target_age_group)
             and (campaign.target_gender    is None or r.gender    == campaign.target_gender)
         )
-        target_match_rate = round(matched / len(interested_rows) * 100, 2)
+        # 2번 수정: ×100 제거, 0~1 범위로 통일
+        target_match_rate = round(matched / len(interested_rows), 4)
 
     return {
         "avg_revisit_count":       avg_revisit_count,

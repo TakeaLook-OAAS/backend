@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 import models, schemas
-from aggregation_helpers import _build_agg_counts
+from aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
 from analysis.golden_zone import run_golden_zone
 
 router = APIRouter()
 
 SCREEN_W = 1280.0
 SCREEN_H = 720.0
+KST = timezone(timedelta(hours=9))
 
 
 def _empty_box_counts() -> dict:
@@ -120,7 +121,8 @@ def get_campaign_aggs(
     rows = query.order_by(models.CampaignAgg.id.desc()).limit(limit).all()
     return schemas.CampaignAggListResponse(results=rows, total=len(rows))
 
-# --- 박스 필터 집계 ──────────────────────────────────────────────
+
+# ── GET /stats/box/ ───────────────────────────────────────────────────────────
 
 @router.get(
     "/box/",
@@ -171,7 +173,7 @@ def get_box_stats(
     )
 
 
-# --- DBSCAN ──────────────────────────────────────────────────────
+# ── GET /stats/golden-zone/ ───────────────────────────────────────────────────
 
 @router.get(
     "/golden-zone/",
@@ -234,7 +236,7 @@ def get_golden_zone(
             for row in clusters_data
         ]
 
-    # ── 날짜 범위 지정: events_raw에서 직접 DBSCAN 실행 ───────────────────────
+    # 날짜 범위 지정: events_raw에서 직접 DBSCAN 실행
     if start_date or end_date:
         query = (
             db.query(models.EventRaw)
@@ -245,13 +247,11 @@ def get_golden_zone(
             )
         )
         if start_date:
-            query = query.filter(
-                func.date(func.timezone("Asia/Seoul", models.EventRaw.ts)) >= start_date
-            )
+            start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+            query = query.filter(models.EventRaw.ts >= start_dt)
         if end_date:
-            query = query.filter(
-                func.date(func.timezone("Asia/Seoul", models.EventRaw.ts)) <= end_date
-            )
+            end_dt = datetime(end_date.year, end_date.month, end_date.day, tzinfo=KST) + timedelta(days=1)
+            query = query.filter(models.EventRaw.ts < end_dt)
 
         rows = query.all()
         if not rows:
@@ -279,7 +279,7 @@ def get_golden_zone(
             clusters = apply_box_filter(result["clusters"], is_raw=True),
         )
 
-    # ── 날짜 없음: dbscan_aggs 저장값 반환 ────────────────────────────────────
+    # 날짜 없음: dbscan_aggs 저장값 반환
     agg_rows = (
         db.query(models.DbscanAgg)
         .filter_by(campaign_id=campaign_id, device_id=device_id)
@@ -309,6 +309,7 @@ def get_golden_zone(
         clusters = apply_box_filter(agg_rows, is_raw=False),
     )
 
+
 # ── GET /stats/range/ ─────────────────────────────────────────────────────────
 
 @router.get(
@@ -325,8 +326,6 @@ def get_range_stats(
     gender:      Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    from aggregation_helpers import _build_advanced_agg_counts
-
     # 날짜 유효성 확인
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
@@ -342,14 +341,17 @@ def get_range_stats(
 
     campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
 
-    # KST 기준 날짜 필터
+    # 3번 수정: KST→UTC 변환 후 범위 비교 (인덱스 사용 가능)
+    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+    end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=KST) + timedelta(days=1)
+
     query = (
         db.query(models.EventRaw)
         .filter(
             models.EventRaw.device_id   == device_id,
             models.EventRaw.campaign_id == campaign_id,
-            func.date(func.timezone("Asia/Seoul", models.EventRaw.ts)) >= start_date,
-            func.date(func.timezone("Asia/Seoul", models.EventRaw.ts)) <= end_date,
+            models.EventRaw.ts >= start_dt,
+            models.EventRaw.ts <  end_dt,
         )
     )
 
@@ -377,11 +379,10 @@ def get_range_stats(
         "target_match_rate":       None,
     }
 
-    summary  = _build_agg_counts(rows)              if rows else empty_summary
+    summary  = _build_agg_counts(rows)                    if rows else empty_summary
     advanced = _build_advanced_agg_counts(rows, campaign) if rows else empty_advanced
 
     # hourly_trend — 00~23시 24개 고정 (KST 기준)
-    KST = timezone(timedelta(hours=9))
     hour_map: dict[int, dict] = {h: {"exposure_count": 0, "interested_count": 0} for h in range(24)}
     for row in rows:
         kst_hour = row.ts.astimezone(KST).hour

@@ -67,9 +67,17 @@ class Campaign(Base):
     target_gender    = Column(String(10), nullable=True)   # "male" / "female"
 
     __table_args__ = (
-        CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
-        CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
-    )
+    CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
+    CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
+    CheckConstraint(
+        "target_age_group IN ('10-19', '20-29', '30-39', '40-49', '50-59', '60+') OR target_age_group IS NULL",
+        name="chk_campaign_target_age_group"
+    ),
+    CheckConstraint(
+        "target_gender IN ('male', 'female') OR target_gender IS NULL",
+        name="chk_campaign_target_gender"
+    ),
+)
 
     events           = relationship("EventRaw", back_populates="campaign")
     device_campaigns = relationship("DeviceCampaign", back_populates="campaign", cascade="all, delete-orphan")
