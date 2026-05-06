@@ -242,6 +242,11 @@ class SendCodeRequest(BaseModel):
     email: str
 
 
+class LoginRequest(BaseModel):
+    email:    str
+    password: str
+
+
 class UserCreate(BaseModel):
     email:    str
     password: str
