@@ -16,7 +16,7 @@ __pycache__/
 #로컬 테스트
 test_local.py
 test_oaas.db
-tests/segments/*
+tests/*
 
 #pem
 .pem
