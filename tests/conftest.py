@@ -77,7 +77,7 @@ def db(engine) -> Session:
     with engine.connect() as conn:
         conn.execute(text(
             "TRUNCATE TABLE "
-            "dbscan_aggs, campaign_aggs, events_raw, segment_logs, campaign_advanced_aggs, "
+            "dbscan_aggs, campaign_aggs, events_raw, segment_logs, "
             "device_campaigns, campaigns, devices, users "
             "RESTART IDENTITY CASCADE"
         ))

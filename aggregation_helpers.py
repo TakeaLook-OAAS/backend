@@ -60,10 +60,11 @@ def _build_advanced_agg_counts(rows: list[EventRaw], campaign: models.Campaign) 
     exposure_count  = len(rows)
     interested_rows = [r for r in rows if r.look_times]
 
-    # 반복 시선 횟수
+    # 반복 시선 횟수 수정: look_times 1개 이상인 track만 계산
+    revisit_rows = [r for r in rows if len(r.look_times) > 1]
     avg_revisit_count = (
-        round(sum(len(r.look_times) for r in rows) / exposure_count, 4)
-        if exposure_count > 0 else 0.0
+        round(sum(len(r.look_times) for r in revisit_rows) / len(revisit_rows), 4)
+        if revisit_rows else 0.0
     )
 
     # 첫 주목 반응 시간 (roi_entry_ms 있는 경우만)
@@ -88,11 +89,10 @@ def _build_advanced_agg_counts(rows: list[EventRaw], campaign: models.Campaign) 
     )
     viewability_score = round(attention_rate_tracks * avg_look_duration_ms, 4)
 
-    # 광고 거부 반응률
-    reactance_count = sum(1 for r in rows if r.exposure_ms < 1000 and not r.look_times)
-    reactance_rate  = round(reactance_count / exposure_count, 4) if exposure_count > 0 else 0.0
+    # 평균 광고 시청 시간 추가 (관심 인구만)
+    avg_attention_time_ms = round(avg_look_duration_ms, 2)
 
-    # 1번 수정: peak_hour KST 기준으로 변경
+    # 피크 시간
     hour_counts: dict[int, int] = {}
     for r in rows:
         h = r.ts.astimezone(KST).hour
@@ -107,14 +107,13 @@ def _build_advanced_agg_counts(rows: list[EventRaw], campaign: models.Campaign) 
             if (campaign.target_age_group is None or r.age_group == campaign.target_age_group)
             and (campaign.target_gender    is None or r.gender    == campaign.target_gender)
         )
-        # 2번 수정: ×100 제거, 0~1 범위로 통일
         target_match_rate = round(matched / len(interested_rows), 4)
 
     return {
         "avg_revisit_count":       avg_revisit_count,
         "avg_fixation_latency_ms": avg_fixation_latency_ms,
         "viewability_score":       viewability_score,
-        "reactance_rate":          reactance_rate,
+        "avg_attention_time_ms":   avg_attention_time_ms,
         "peak_hour":               peak_hour,
         "target_match_rate":       target_match_rate,
     }

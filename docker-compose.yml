@@ -5,7 +5,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: DockerFile
+      dockerfile: Dockerfile
     container_name: back_dev
     env_file:
       - .env # ← Docker가 직접 주입

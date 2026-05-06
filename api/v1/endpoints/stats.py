@@ -29,73 +29,14 @@ def _empty_box_counts() -> dict:
 
 # # ── GET /stats/daily/ ─────────────────────────────────────────────────────────
 
-# @router.get(
-#     "/daily/",
-#     response_model=schemas.DailyAggListResponse,
-#     summary="일별 집계 조회",
-# )
-# def get_daily_aggs(
-#     device_id:   Optional[uuid.UUID] = None,
-#     campaign_id: Optional[uuid.UUID] = None,
-#     start_date:  Optional[date]      = None,
-#     end_date:    Optional[date]      = None,
-#     target_date: Optional[date]      = None,  # 특정 날짜
-#     limit:       int = Query(default=100, ge=1, le=1000),
-#     db: Session = Depends(get_db),
-# ):
-#     query = db.query(models.DailyAgg)
-
-#     if device_id:
-#         query = query.filter(models.DailyAgg.device_id == device_id)
-#     if campaign_id:
-#         query = query.filter(models.DailyAgg.campaign_id == campaign_id)
-#     if target_date:
-#         query = query.filter(models.DailyAgg.date == target_date)
-#     else:
-#         if start_date:
-#             query = query.filter(models.DailyAgg.date >= start_date)
-#         if end_date:
-#             query = query.filter(models.DailyAgg.date <= end_date)
-
-#     rows = query.order_by(models.DailyAgg.date.desc()).limit(limit).all()
-#     return schemas.DailyAggListResponse(results=rows, total=len(rows))
+# @router.get("/daily/", response_model=schemas.DailyAggListResponse, summary="일별 집계 조회")
+# def get_daily_aggs(...): ...
 
 
 # # ── GET /stats/hourly/ ────────────────────────────────────────────────────────
 
-# @router.get(
-#     "/hourly/",
-#     response_model=schemas.HourlyAggListResponse,
-#     summary="시간별 집계 조회",
-# )
-# def get_hourly_aggs(
-#     device_id:   Optional[uuid.UUID] = None,
-#     campaign_id: Optional[uuid.UUID] = None,
-#     start_date:  Optional[date]      = None,
-#     end_date:    Optional[date]      = None,
-#     target_date: Optional[date]      = None,
-#     limit:       int = Query(default=100, ge=1, le=1000),
-#     db: Session = Depends(get_db),
-# ):
-#     query = db.query(models.HourlyAgg)
-
-#     if device_id:
-#         query = query.filter(models.HourlyAgg.device_id == device_id)
-#     if campaign_id:
-#         query = query.filter(models.HourlyAgg.campaign_id == campaign_id)
-#     if target_date:
-#         query = query.filter(
-#             models.HourlyAgg.hour >= target_date,
-#             models.HourlyAgg.hour  < target_date + timedelta(days=1),
-#         )
-#     else:
-#         if start_date:
-#             query = query.filter(models.HourlyAgg.hour >= start_date)
-#         if end_date:
-#             query = query.filter(models.HourlyAgg.hour  < end_date + timedelta(days=1))
-
-#     rows = query.order_by(models.HourlyAgg.hour.desc()).limit(limit).all()
-#     return schemas.HourlyAggListResponse(results=rows, total=len(rows))
+# @router.get("/hourly/", response_model=schemas.HourlyAggListResponse, summary="시간별 집계 조회")
+# def get_hourly_aggs(...): ...
 
 
 # ── GET /stats/campaign/ ──────────────────────────────────────────────────────
@@ -314,6 +255,7 @@ def get_golden_zone(
 
 @router.get(
     "/range/",
+    response_model=schemas.RangeStatsResponse,
     summary="기간별 집계 조회 (실시간 계산)",
     description="기본 지표 + 고급 지표 + hourly/daily 추이를 한 번에 반환합니다.",
 )
@@ -326,11 +268,9 @@ def get_range_stats(
     gender:      Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    # 날짜 유효성 확인
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
 
-    # device_id + campaign_id 조합 유효성 확인
     device_campaign = (
         db.query(models.DeviceCampaign)
         .filter_by(device_id=device_id, campaign_id=campaign_id)
@@ -341,7 +281,6 @@ def get_range_stats(
 
     campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
 
-    # 3번 수정: KST→UTC 변환 후 범위 비교 (인덱스 사용 가능)
     start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
     end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=KST) + timedelta(days=1)
 
@@ -362,7 +301,6 @@ def get_range_stats(
 
     rows = query.all()
 
-    # 데이터 없어도 200 반환
     empty_summary = {
         "exposure_count": 0, "avg_dwell_time_ms": 0.0, "interested_count": 0,
         "attention_rate_tracks": 0.0, "total_attention_time_ms": 0.0,
@@ -374,7 +312,7 @@ def get_range_stats(
         "avg_revisit_count":       0.0,
         "avg_fixation_latency_ms": None,
         "viewability_score":       0.0,
-        "reactance_rate":          0.0,
+        "avg_attention_time_ms":   0.0,
         "peak_hour":               None,
         "target_match_rate":       None,
     }

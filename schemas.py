@@ -152,42 +152,42 @@ class AggBase(BaseModel):
         return str(v) if hasattr(v, 'hex') else v
 
 
-class DailyAggResponse(AggBase):
-    id:          int
-    date:        date
-    device_id:   str
-    campaign_id: str
-    created_at:  datetime
-    updated_at:  datetime
+# class DailyAggResponse(AggBase):
+#     id:          int
+#     date:        date
+#     device_id:   str
+#     campaign_id: str
+#     created_at:  datetime
+#     updated_at:  datetime
 
-    @field_validator("device_id", "campaign_id", mode="before")
-    @classmethod
-    def uuid_to_str(cls, v):
-        return str(v)
-
-
-class DailyAggListResponse(BaseModel):
-    results: List[DailyAggResponse]
-    total:   int
+#     @field_validator("device_id", "campaign_id", mode="before")
+#     @classmethod
+#     def uuid_to_str(cls, v):
+#         return str(v)
 
 
-class HourlyAggResponse(AggBase):
-    id:          int
-    hour:        datetime
-    device_id:   str
-    campaign_id: str
-    created_at:  datetime
-    updated_at:  datetime
-
-    @field_validator("device_id", "campaign_id", mode="before")
-    @classmethod
-    def uuid_to_str(cls, v):
-        return str(v)
+# class DailyAggListResponse(BaseModel):
+#     results: List[DailyAggResponse]
+#     total:   int
 
 
-class HourlyAggListResponse(BaseModel):
-    results: List[HourlyAggResponse]
-    total:   int
+# class HourlyAggResponse(AggBase):
+#     id:          int
+#     hour:        datetime
+#     device_id:   str
+#     campaign_id: str
+#     created_at:  datetime
+#     updated_at:  datetime
+
+#     @field_validator("device_id", "campaign_id", mode="before")
+#     @classmethod
+#     def uuid_to_str(cls, v):
+#         return str(v)
+
+
+# class HourlyAggListResponse(BaseModel):
+#     results: List[HourlyAggResponse]
+#     total:   int
 
 
 class CampaignAggResponse(AggBase):
@@ -196,6 +196,14 @@ class CampaignAggResponse(AggBase):
     campaign_id: str
     created_at:  datetime
     updated_at:  datetime
+    
+    # 고급 지표
+    avg_revisit_count:       float
+    avg_fixation_latency_ms: Optional[float]
+    viewability_score:       float
+    avg_attention_time_ms:   float
+    peak_hour:               Optional[int]
+    target_match_rate:       Optional[float]
 
     @field_validator("device_id", "campaign_id", mode="before")
     @classmethod
@@ -274,3 +282,35 @@ class UserResponse(BaseModel):
     @classmethod
     def role_to_str(cls, v):
         return v.value if hasattr(v, "value") else v
+
+# ── GET /stats/range/ 응답 ────────────────────────────────────────────────────
+
+class HourlyTrend(BaseModel):
+    hour:             str
+    exposure_count:   int
+    interested_count: int
+
+
+class DailyTrend(BaseModel):
+    date:             str
+    exposure_count:   int
+    interested_count: int
+
+
+class RangeStatsResponse(AggBase):
+    start_date:  str
+    end_date:    str
+    device_id:   str
+    campaign_id: str
+
+    # 고급 지표
+    avg_revisit_count:       float
+    avg_fixation_latency_ms: Optional[float]
+    viewability_score:       float
+    avg_attention_time_ms:   float
+    peak_hour:               Optional[int]
+    target_match_rate:       Optional[float]
+
+    # 추이
+    hourly_trend: List[HourlyTrend]
+    daily_trend:  List[DailyTrend]

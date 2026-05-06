@@ -228,6 +228,14 @@ class AggMixin:
     count_male   = Column(Integer, nullable=False, default=0)
     count_female = Column(Integer, nullable=False, default=0)
 
+   # 고급 지표
+    avg_revisit_count       = Column(Float,   nullable=False, default=0.0)
+    avg_fixation_latency_ms = Column(Float,   nullable=True)
+    viewability_score       = Column(Float,   nullable=False, default=0.0)
+    avg_attention_time_ms   = Column(Float,   nullable=False, default=0.0)  # 추가
+    peak_hour               = Column(Integer, nullable=True)
+    target_match_rate       = Column(Float,   nullable=True)
+
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -266,46 +274,6 @@ class CampaignAgg(AggMixin, Base):
 
     __table_args__ = (
         UniqueConstraint("device_id", "campaign_id", name="uq_campaign_agg"),
-    )
-
-    device   = relationship("Device")
-    campaign = relationship("Campaign")
-
-
-# 8. 캠페인 전체 기간 고급 분석 집계
-class CampaignAdvancedAgg(Base):
-    __tablename__ = "campaign_advanced_aggs"
-
-    id          = Column(BigInteger, primary_key=True, autoincrement=True)
-    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-
-    # 반복 시선 횟수 (Revisit Count) — len(look_times) per track 평균
-    avg_revisit_count    = Column(Float,   nullable=False, default=0.0)
-
-    # 첫 주목 반응 시간 (Fixation Latency) — AI팀 roi_entry_ms 데이터 필요, 나중에 채움
-    avg_fixation_latency_ms = Column(Float, nullable=True)
-
-    # 노출 대비 시청 효율 (Viewability Score)
-    # (interested_count / exposure_count) × avg_look_time_ms
-    viewability_score    = Column(Float,   nullable=False, default=0.0)
-
-    # 광고 거부 반응률 (Psychological Reactance)
-    # exposure_ms < 1000ms + look_times 비어있는 track 비율
-    reactance_rate       = Column(Float,   nullable=False, default=0.0)
-
-    # 피크 시간 (0~23시) — 가장 많은 exposure가 발생한 시간대
-    peak_hour            = Column(Integer, nullable=True)
-
-    # 타겟 오디언스 정합률 (Audience Segmentation)
-    # campaign.target_age_group / target_gender 기준
-    target_match_rate    = Column(Float,   nullable=True)
-
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-
-    __table_args__ = (
-        UniqueConstraint("device_id", "campaign_id", name="uq_campaign_advanced_agg"),
     )
 
     device   = relationship("Device")

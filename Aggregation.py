@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from models import EventRaw, CampaignAgg, CampaignAdvancedAgg
+from models import EventRaw, CampaignAgg
 from analysis.golden_zone import run_golden_zone, save_golden_zone
 from aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
 import models
@@ -10,17 +10,8 @@ import models
 logger = logging.getLogger(__name__)
 
 
-# ── 비활성화: 일/시간 단위 집계 (실시간 ROI 통계 기능으로 대체 예정) ──────────
-
-# def run_daily_aggregation(db: Session, target_date: date | None = None) -> None:
-#     ...
-
-# def run_hourly_aggregation(db: Session, target_date: date | None = None) -> None:
-#     ...
-
-
 def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
-    """캠페인 전체 기간 기본 집계 → campaign_aggs"""
+    """캠페인 전체 기간 기본 + 고급 집계 → campaign_aggs"""
     logger.info(f"[CampaignAgg] 집계 시작 | campaign_id={campaign_id}")
 
     query = db.query(EventRaw)
@@ -37,56 +28,26 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
         groups.setdefault((row.device_id, row.campaign_id), []).append(row)
 
     for (device_id, camp_id), group_rows in groups.items():
-        counts   = _build_agg_counts(group_rows)
-        existing = db.query(CampaignAgg).filter_by(device_id=device_id, campaign_id=camp_id).first()
-
-        if existing:
-            for k, v in counts.items():
-                setattr(existing, k, v)
-            logger.info(f"[CampaignAgg] 업데이트 | device={device_id} | campaign={camp_id}")
-        else:
-            db.add(CampaignAgg(device_id=device_id, campaign_id=camp_id, **counts))
-            logger.info(f"[CampaignAgg] 신규 INSERT | device={device_id} | campaign={camp_id}")
-
-    db.commit()
-    logger.info(f"[CampaignAgg] 집계 완료 | 그룹 수={len(groups)}")
-
-
-def run_advanced_aggregation(db: Session, campaign_id=None) -> None:
-    """캠페인 전체 기간 고급 집계 → campaign_advanced_aggs"""
-    logger.info(f"[AdvancedAgg] 집계 시작 | campaign_id={campaign_id}")
-
-    query = db.query(EventRaw)
-    if campaign_id is not None:
-        query = query.filter(EventRaw.campaign_id == campaign_id)
-    rows = query.all()
-
-    if not rows:
-        logger.info(f"[AdvancedAgg] 데이터 없음 | campaign_id={campaign_id}")
-        return
-
-    groups: dict[tuple, list[EventRaw]] = {}
-    for row in rows:
-        groups.setdefault((row.device_id, row.campaign_id), []).append(row)
-
-    for (device_id, camp_id), group_rows in groups.items():
         campaign = db.query(models.Campaign).filter_by(id=camp_id).first()
         if not campaign:
             continue
 
-        counts   = _build_advanced_agg_counts(group_rows, campaign)
-        existing = db.query(CampaignAdvancedAgg).filter_by(device_id=device_id, campaign_id=camp_id).first()
+        counts          = _build_agg_counts(group_rows)
+        advanced_counts = _build_advanced_agg_counts(group_rows, campaign)
+        all_counts      = {**counts, **advanced_counts}
+
+        existing = db.query(CampaignAgg).filter_by(device_id=device_id, campaign_id=camp_id).first()
 
         if existing:
-            for k, v in counts.items():
+            for k, v in all_counts.items():
                 setattr(existing, k, v)
-            logger.info(f"[AdvancedAgg] 업데이트 | device={device_id} | campaign={camp_id}")
+            logger.info(f"[CampaignAgg] 업데이트 | device={device_id} | campaign={camp_id}")
         else:
-            db.add(CampaignAdvancedAgg(device_id=device_id, campaign_id=camp_id, **counts))
-            logger.info(f"[AdvancedAgg] 신규 INSERT | device={device_id} | campaign={camp_id}")
+            db.add(CampaignAgg(device_id=device_id, campaign_id=camp_id, **all_counts))
+            logger.info(f"[CampaignAgg] 신규 INSERT | device={device_id} | campaign={camp_id}")
 
     db.commit()
-    logger.info(f"[AdvancedAgg] 집계 완료 | 그룹 수={len(groups)}")
+    logger.info(f"[CampaignAgg] 집계 완료 | 그룹 수={len(groups)}")
 
 
 def run_dbscan_aggregation(db: Session) -> None:
@@ -105,7 +66,7 @@ def run_dbscan_aggregation(db: Session) -> None:
         return
 
     for device_id, campaign_id in pairs:
-        rows   = (
+        rows = (
             db.query(EventRaw)
             .filter(
                 EventRaw.device_id   == device_id,
@@ -129,9 +90,8 @@ def run_dbscan_aggregation(db: Session) -> None:
 
 
 def run_all_aggregations(db: Session, target_date: date | None = None) -> None:
-    """campaign + advanced + dbscan 집계를 한 번에 실행합니다."""
+    """campaign + dbscan 집계를 한 번에 실행합니다."""
     run_campaign_aggregation(db)
-    run_advanced_aggregation(db)
     run_dbscan_aggregation(db)
 
 

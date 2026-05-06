@@ -8,8 +8,8 @@ import json
 import pytest
 from datetime import date
 from sqlalchemy import func
-from models import EventRaw, SegmentLog, CampaignAgg, CampaignAdvancedAgg
-from Aggregation import run_campaign_aggregation, run_advanced_aggregation
+from models import EventRaw, SegmentLog, CampaignAgg
+from Aggregation import run_campaign_aggregation
 import models
 
 SEGMENTS_DIR = os.path.join(os.path.dirname(__file__), "segments")
@@ -146,40 +146,6 @@ class TestAggregation:
         run_campaign_aggregation(db)
         assert db.query(CampaignAgg).count() == 0
 
-    def test_advanced_agg_생성(self, client, db, seed):
-        send_all_segments(client, seed)
-        db.expire_all()
-        run_advanced_aggregation(db)
-        assert db.query(CampaignAdvancedAgg).count() > 0
-
-    def test_advanced_agg_avg_revisit_count_양수(self, client, db, seed):
-        send_all_segments(client, seed)
-        db.expire_all()
-        run_advanced_aggregation(db)
-
-        for agg in db.query(CampaignAdvancedAgg).all():
-            assert agg.avg_revisit_count >= 0.0
-
-    def test_advanced_agg_reactance_rate_범위(self, client, db, seed):
-        send_all_segments(client, seed)
-        db.expire_all()
-        run_advanced_aggregation(db)
-
-        for agg in db.query(CampaignAdvancedAgg).all():
-            assert 0.0 <= agg.reactance_rate <= 1.0
-
-    def test_advanced_agg_중복_실행시_UPDATE(self, client, db, seed):
-        send_all_segments(client, seed)
-        db.expire_all()
-
-        run_advanced_aggregation(db)
-        count_before = db.query(CampaignAdvancedAgg).count()
-
-        run_advanced_aggregation(db)
-        count_after = db.query(CampaignAdvancedAgg).count()
-
-        assert count_before == count_after
-
 
 # ── 3단계: GET /events/ 조회 테스트 ──────────────────────────────────────────
 
@@ -215,7 +181,6 @@ class TestStats:
         send_all_segments(client, seed)
         db.expire_all()
         run_campaign_aggregation(db)
-        run_advanced_aggregation(db)
 
     # ── campaign ──────────────────────────────────────────────────────────────
 

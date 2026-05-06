@@ -17,3 +17,6 @@ __pycache__/
 test_local.py
 test_oaas.db
 tests/segments/*
+
+#pem
+.pem
