@@ -12,19 +12,7 @@ from analysis.golden_zone import run_golden_zone
 
 router = APIRouter()
 
-SCREEN_W = 1280.0
-SCREEN_H = 720.0
 KST = timezone(timedelta(hours=9))
-
-
-def _empty_box_counts() -> dict:
-    return {
-        "exposure_count": 0, "avg_dwell_time_ms": 0.0, "interested_count": 0,
-        "attention_rate_tracks": 0.0, "total_attention_time_ms": 0.0,
-        "attention_rate_times": 0.0, "count_10s": 0, "count_20s": 0,
-        "count_30s": 0, "count_40s": 0, "count_50s_plus": 0,
-        "count_60s_plus": 0, "count_male": 0, "count_female": 0,
-    }
 
 
 # # ── GET /stats/daily/ ─────────────────────────────────────────────────────────
@@ -122,57 +110,6 @@ def get_campaign_aggs(
     return schemas.CampaignAggListResponse(results=rows, total=len(rows))
 
 
-# ── GET /stats/box/ ───────────────────────────────────────────────────────────
-
-@router.get(
-    "/box/",
-    response_model=schemas.BoxStatsResponse,
-    summary="박스 필터 집계",
-)
-def get_box_stats(
-    campaign_id: uuid.UUID,
-    device_id:   uuid.UUID,
-    x_min: float = Query(..., ge=0.0, le=100.0),
-    y_min: float = Query(..., ge=0.0, le=100.0),
-    x_max: float = Query(..., ge=0.0, le=100.0),
-    y_max: float = Query(..., ge=0.0, le=100.0),
-    db: Session = Depends(get_db),
-):
-    px_x_min = (x_min / 100.0) * SCREEN_W
-    px_x_max = (x_max / 100.0) * SCREEN_W
-    px_y_min = (y_min / 100.0) * SCREEN_H
-    px_y_max = (y_max / 100.0) * SCREEN_H
-
-    all_rows = (
-        db.query(models.EventRaw)
-        .filter(
-            models.EventRaw.campaign_id == campaign_id,
-            models.EventRaw.device_id   == device_id,
-        )
-        .all()
-    )
-
-    def in_box(event) -> bool:
-        for lt in (event.look_times or []):
-            sc = lt.get("start_center")
-            ec = lt.get("end_center")
-            if sc and px_x_min <= sc[0] <= px_x_max and px_y_min <= sc[1] <= px_y_max:
-                return True
-            if ec and px_x_min <= ec[0] <= px_x_max and px_y_min <= ec[1] <= px_y_max:
-                return True
-        return False
-
-    filtered = [r for r in all_rows if in_box(r)]
-    counts   = _build_agg_counts(filtered) if filtered else _empty_box_counts()
-
-    return schemas.BoxStatsResponse(
-        campaign_id    = str(campaign_id),
-        device_id      = str(device_id),
-        matched_tracks = len(filtered),
-        **counts,
-    )
-
-
 # ── GET /stats/golden-zone/ ───────────────────────────────────────────────────
 
 @router.get(
@@ -188,54 +125,10 @@ def get_box_stats(
 def get_golden_zone(
     campaign_id: uuid.UUID,
     device_id:   uuid.UUID,
-    x_min: Optional[float] = None,
-    y_min: Optional[float] = None,
-    x_max: Optional[float] = None,
-    y_max: Optional[float] = None,
     start_date: Optional[date] = None,
     end_date:   Optional[date] = None,
     db: Session = Depends(get_db),
 ):
-    has_box = all(v is not None for v in [x_min, y_min, x_max, y_max])
-
-    def apply_box_filter(clusters_data: list, is_raw: bool) -> list:
-        if not has_box:
-            if is_raw:
-                return [
-                    schemas.GoldenZoneCluster(label=c["label"], point_count=c["point_count"], points=c["points"])
-                    for c in clusters_data
-                ]
-            return [
-                schemas.GoldenZoneCluster(label=row.cluster_label, point_count=row.cluster_point_count, points=row.points)
-                for row in clusters_data
-            ]
-
-        px_x_min = (x_min / 100.0) * SCREEN_W
-        px_x_max = (x_max / 100.0) * SCREEN_W
-        px_y_min = (y_min / 100.0) * SCREEN_H
-        px_y_max = (y_max / 100.0) * SCREEN_H
-
-        def in_box(p):
-            return px_x_min <= p[0] <= px_x_max and px_y_min <= p[1] <= px_y_max
-
-        if is_raw:
-            return [
-                schemas.GoldenZoneCluster(
-                    label=c["label"],
-                    points=[p for p in (c["points"] or []) if in_box(p)],
-                    point_count=len([p for p in (c["points"] or []) if in_box(p)]),
-                )
-                for c in clusters_data
-            ]
-        return [
-            schemas.GoldenZoneCluster(
-                label=row.cluster_label,
-                points=[p for p in (row.points or []) if in_box(p)],
-                point_count=len([p for p in (row.points or []) if in_box(p)]),
-            )
-            for row in clusters_data
-        ]
-
     # 날짜 범위 지정: events_raw에서 직접 DBSCAN 실행
     if start_date or end_date:
         query = (
@@ -276,7 +169,10 @@ def get_golden_zone(
                 cluster_count = result["dbscan"]["cluster_count"],
                 noise_count   = result["dbscan"]["noise_count"],
             ),
-            clusters = apply_box_filter(result["clusters"], is_raw=True),
+            clusters = [
+                schemas.GoldenZoneCluster(label=c["label"], point_count=c["point_count"], points=c["points"])
+                for c in result["clusters"]
+            ],
         )
 
     # 날짜 없음: dbscan_aggs 저장값 반환
@@ -306,7 +202,10 @@ def get_golden_zone(
             cluster_count = first.cluster_count,
             noise_count   = first.noise_count,
         ),
-        clusters = apply_box_filter(agg_rows, is_raw=False),
+        clusters = [
+            schemas.GoldenZoneCluster(label=row.cluster_label, point_count=row.cluster_point_count, points=row.points)
+            for row in agg_rows
+        ],
     )
 
 
