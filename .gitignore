@@ -1,0 +1,22 @@
+#가상환경
+.venv/
+venv/
+env/
+
+#파이썬 잔여물
+__pycache__/
+*.pyc
+
+#MACOS
+.DS_Store
+
+#env
+.env
+
+#로컬 테스트
+test_local.py
+test_oaas.db
+tests/
+
+#pem
+*.pem
