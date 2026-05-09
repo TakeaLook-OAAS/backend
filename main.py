@@ -6,6 +6,7 @@ from api.v1.endpoints import events, stats, auth
 from database import get_db, create_tables
 from contextlib import asynccontextmanager
 from api.v1.endpoints import export
+import os
 
 # -------------------------------------------------------------------
 # [Lifespan 이벤트 핸들러 정의]
@@ -28,9 +29,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OAAS API", lifespan=lifespan)
 
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
