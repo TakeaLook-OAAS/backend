@@ -24,3 +24,4 @@ python-multipart==0.0.20         # OAuth2PasswordRequestForm (form data 파싱)
 pytest==9.0.2 # 테스트 프레임워크
 httpx==0.28.1 # HTTP 클라이언트 라이브러리 (테스트용)
 python-jose[cryptography] ==3.3.0 # JWT 토큰 생성 및 검증 (테스트용)
+resend==2.10.0           # Resend 이메일 발송 SDK
