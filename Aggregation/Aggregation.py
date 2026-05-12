@@ -2,10 +2,10 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from models import EventRaw, CampaignAgg
+from database.models import EventRaw, CampaignAgg
 from Aggregation.golden_zone import run_golden_zone, save_golden_zone
 from Aggregation.aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
-import models
+import database.models as models
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     else:
         print(f"날짜 미지정 → 어제 날짜 사용 (KST): {target}")
 
-    from database import SessionLocal
+    from database.database import SessionLocal
     db = SessionLocal()
     try:
         run_all_aggregations(db)

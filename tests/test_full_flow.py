@@ -8,9 +8,9 @@ import json
 import pytest
 from datetime import date
 from sqlalchemy import func
-from models import EventRaw, SegmentLog, CampaignAgg
+from database.models import EventRaw, SegmentLog, CampaignAgg
 from Aggregation.Aggregation import run_campaign_aggregation
-import models
+import database.models as models
 
 SEGMENTS_DIR = os.path.join(os.path.dirname(__file__), "segments")
 SEGMENT_FILES = [f"segment_{i:03d}.json" for i in range(10)]

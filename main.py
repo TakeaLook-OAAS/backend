@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from api.v1.endpoints import events, stats, auth, admin
-from database import get_db, create_tables
+from database.database import get_db, create_tables
 from contextlib import asynccontextmanager
 from api.v1.endpoints import export
 import os

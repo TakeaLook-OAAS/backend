@@ -7,8 +7,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from database import get_db
-import models
+from database.database import get_db
+import database.models as models
 
 router = APIRouter()
 

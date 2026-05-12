@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import Base  # Base는 models.py에 있음
+from database.models import Base  # Base는 models.py에 있음
 import os
 
 # 환경변수에서 DB 접속 정보 읽기

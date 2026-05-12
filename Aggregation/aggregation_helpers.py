@@ -1,5 +1,5 @@
-import models
-from models import EventRaw
+import database.models as models
+from database.models import EventRaw
 from datetime import timezone, timedelta
 
 KST = timezone(timedelta(hours=9))

@@ -5,13 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import User, RevokedToken, EmailVerification
-from schemas import TokenResponse, UserCreate, UserResponse, SendCodeRequest, LoginRequest
+from database.database import get_db
+from database.models import User, RevokedToken, EmailVerification
+from database.schemas import TokenResponse, UserCreate, UserResponse, SendCodeRequest, LoginRequest
 from core.security import hash_password, verify_password, create_access_token, decode_access_token
 from core.deps import get_current_user, oauth2_scheme
 from core.email import send_verification_email
-from enums import UserRole
+from database.enums import UserRole
 
 router = APIRouter()
 

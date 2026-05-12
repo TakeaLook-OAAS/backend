@@ -14,7 +14,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from sqlalchemy.orm import Session
 
-import models
+import database.models as models
 
 
 # ── 보간 ──────────────────────────────────────────────────────────────────────

@@ -4,9 +4,9 @@ from datetime import timedelta, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from database import get_db
-import models, schemas
-from enums import DeviceStatus
+from database.database import get_db
+import database.models as models, database.schemas as schemas
+from database.enums import DeviceStatus
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
