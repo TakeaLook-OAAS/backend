@@ -3,8 +3,8 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models import User, RevokedToken
+from database.database import get_db
+from database.models import User, RevokedToken
 from core.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -34,7 +34,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    from enums import UserRole
+    from database.enums import UserRole
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 권한이 필요합니다.")
     return current_user

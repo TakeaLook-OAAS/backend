@@ -30,8 +30,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
 
-from models import Base, Device, Campaign, DeviceCampaign
-from enums import DeviceStatus, CampaignStatus
+from database.models import Base, Device, Campaign, DeviceCampaign
+from database.enums import DeviceStatus, CampaignStatus
 
 ADMIN_URL = os.getenv("TEST_ADMIN_DB_URL")
 TEST_DB_URL = os.getenv("TEST_DB_URL")
@@ -141,7 +141,7 @@ def client(db) -> TestClient:
     get_db 의존성을 테스트 세션으로 교체한 FastAPI TestClient.
     """
     from main import app
-    from database import get_db
+    from database.database import get_db
 
     def override_get_db():
         yield db
