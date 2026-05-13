@@ -13,7 +13,7 @@ from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKe
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from enums import DeviceStatus, CampaignStatus, UserRole
+from database.enums import DeviceStatus, CampaignStatus, UserRole
 
 Base = declarative_base()
 

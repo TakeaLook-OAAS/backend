@@ -2,10 +2,11 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from api.v1.endpoints import events, stats, auth, campaigns
-from database import get_db, create_tables
+from api.v1.endpoints import events, stats, auth, admin, campaigns
+from database.database import get_db, create_tables
 from contextlib import asynccontextmanager
 from api.v1.endpoints import export
+import os
 
 # -------------------------------------------------------------------
 # [Lifespan 이벤트 핸들러 정의]
@@ -28,9 +29,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="OAAS API", lifespan=lifespan)
 
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,6 +45,7 @@ app.include_router(auth.router,        prefix="/auth",        tags=["auth"])
 app.include_router(events.router,      prefix="/events",      tags=["events"])
 app.include_router(stats.router,       prefix="/stats",       tags=["stats"])
 app.include_router(export.router,      prefix="/export",      tags=["export"])
+app.include_router(admin.router,       prefix="/admin",       tags=["admin"])
 app.include_router(campaigns.router,   prefix="/campaigns",   tags=["campaigns"])
 
 # ── 헬스체크 ──────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from unittest.mock import MagicMock
-from models import EventRaw
+from database.models import EventRaw
 from Aggregation.Aggregation import _build_agg_counts
 
 

@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import Optional
-from database import get_db
-import models, schemas
+from database.database import get_db
+import database.models as models, database.schemas as schemas
 from Aggregation.aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
 from Aggregation.golden_zone import run_golden_zone
 
