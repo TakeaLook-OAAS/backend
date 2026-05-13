@@ -91,7 +91,7 @@ def get_golden_zone(
         if not rows:
             raise HTTPException(status_code=404, detail="해당 기간에 look_times 데이터가 없습니다.")
 
-        result = run_golden_zone(rows=rows, eps=100.0, min_samples=10, n_interp=5)
+        result = run_golden_zone(rows=rows, eps=100.0, min_samples=50, n_interp=2)
         if result["status"] != "ok":
             raise HTTPException(
                 status_code=404,

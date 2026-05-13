@@ -294,6 +294,52 @@ class DailyTrend(BaseModel):
     interested_count: int
 
 
+# ── GET /campaigns/ 응답 ─────────────────────────────────────────────────────
+
+class DeviceSimple(BaseModel):
+    id:     str
+    name:   str
+    status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def enum_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v
+
+
+class CampaignWithDevices(BaseModel):
+    id:         str
+    name:       str
+    status:     str
+    start_date: date
+    end_date:   date
+    devices:    List[DeviceSimple]
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def enum_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v
+
+
+class CampaignListResponse(BaseModel):
+    results: List[CampaignWithDevices]
+    total:   int
+
+
 class RangeStatsResponse(AggBase):
     start_date:  str
     end_date:    str
