@@ -75,6 +75,7 @@ class Campaign(Base):
     __tablename__ = "campaigns"
 
     id         = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     name       = Column(String(100), nullable=False)
     start_date = Column(Date, nullable=False)
     end_date   = Column(Date, nullable=False)
@@ -99,6 +100,8 @@ class Campaign(Base):
         ),
     )
 
+
+    user             = relationship("User")
     events           = relationship("EventRaw", back_populates="campaign")
     device_campaigns = relationship("DeviceCampaign", back_populates="campaign", cascade="all, delete-orphan")
 
@@ -135,6 +138,10 @@ class SegmentLog(Base):
     cycle_index = Column(Integer, nullable=False)
     duration_ms = Column(Integer, nullable=False)
     roi_polygon = Column(JSONB, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("device_id", "ts", "index", name="uq_segment_log"),
+    )
 
     device = relationship("Device", back_populates="segment_logs")
 
@@ -240,28 +247,60 @@ class AggMixin:
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
 
-# 5. 시간 단위 통계 집계 — 비활성화 (실시간 ROI 통계 기능으로 대체 예정)
-# class HourlyAgg(AggMixin, Base):
-#     __tablename__ = "hourly_aggs"
-#     id          = Column(BigInteger, primary_key=True, autoincrement=True)
-#     hour        = Column(DateTime(timezone=True), nullable=False)
-#     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
-#     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-#     __table_args__ = (UniqueConstraint("hour", "device_id", "campaign_id", name="uq_hourly_agg"),)
-#     device   = relationship("Device")
-#     campaign = relationship("Campaign")
+# 5. 시간 단위 통계 집계
+class HourlyAgg(Base):
+    __tablename__ = "hourly_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    date        = Column(Date,    nullable=False)
+    hour        = Column(Integer, nullable=False)   # 0~23 KST
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    age_group   = Column(String(20), nullable=True)
+    gender      = Column(String(10), nullable=True)
+
+    exposure_count   = Column(Integer, nullable=False, default=0)
+    interested_count = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("date", "hour", "device_id", "campaign_id", "age_group", "gender", name="uq_hourly_agg"),
+    )
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
 
 
-# 6. 일 단위 통계 집계 — 비활성화 (실시간 ROI 통계 기능으로 대체 예정)
-# class DailyAgg(AggMixin, Base):
-#     __tablename__ = "daily_aggs"
-#     id          = Column(BigInteger, primary_key=True, autoincrement=True)
-#     date        = Column(Date, nullable=False)
-#     device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
-#     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
-#     __table_args__ = (UniqueConstraint("date", "device_id", "campaign_id", name="uq_daily_agg"),)
-#     device   = relationship("Device")
-#     campaign = relationship("Campaign")
+# 6. 일 단위 통계 집계
+class DailyAgg(Base):
+    __tablename__ = "daily_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    date        = Column(Date, nullable=False)
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    age_group   = Column(String(20), nullable=True)
+    gender      = Column(String(10), nullable=True)
+
+    exposure_count            = Column(Integer,    nullable=False, default=0)
+    interested_count          = Column(Integer,    nullable=False, default=0)
+    total_dwell_ms            = Column(BigInteger, nullable=False, default=0)
+    total_attention_ms        = Column(BigInteger, nullable=False, default=0)
+    revisit_track_count       = Column(Integer,    nullable=False, default=0)
+    total_revisit_look_count  = Column(Integer,    nullable=False, default=0)
+    total_fixation_latency_ms = Column(Float,      nullable=True)
+    fixation_latency_count    = Column(Integer,    nullable=False, default=0)
+    target_matched_count      = Column(Integer,    nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("date", "device_id", "campaign_id", "age_group", "gender", name="uq_daily_agg"),
+    )
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
 
 
 # 7. 캠페인 전체 기간 기본 집계

@@ -357,3 +357,10 @@ class RangeStatsResponse(AggBase):
     # 추이
     hourly_trend: List[HourlyTrend]
     daily_trend:  List[DailyTrend]
+
+class CampaignCreate(BaseModel):
+    name:             str
+    start_date:       date
+    end_date:         date
+    target_age_group: Optional[str] = None
+    target_gender:    Optional[str] = None

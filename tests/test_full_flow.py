@@ -8,8 +8,8 @@ import json
 import pytest
 from datetime import date
 from sqlalchemy import func
-from database.models import EventRaw, SegmentLog, CampaignAgg
-from Aggregation.Aggregation import run_campaign_aggregation
+from database.models import EventRaw, SegmentLog, CampaignAgg, DailyAgg, HourlyAgg
+from Aggregation.Aggregation import run_campaign_aggregation, run_daily_aggregation
 import database.models as models
 
 SEGMENTS_DIR = os.path.join(os.path.dirname(__file__), "segments")
@@ -95,14 +95,11 @@ class TestAggregation:
     def test_campaign_agg_생성(self, client, db, seed):
         send_all_segments(client, seed)
         db.expire_all()
-        run_campaign_aggregation(db)
         assert db.query(CampaignAgg).count() > 0
 
     def test_campaign_agg_exposure_count(self, client, db, seed):
         send_all_segments(client, seed)
         db.expire_all()
-        run_campaign_aggregation(db)
-
         total_tracks   = db.query(EventRaw).count()
         total_exposure = sum(agg.exposure_count for agg in db.query(CampaignAgg).all())
         assert total_exposure == total_tracks
@@ -110,9 +107,6 @@ class TestAggregation:
     def test_campaign_agg_interested_count(self, client, db, seed):
         send_all_segments(client, seed)
         db.expire_all()
-        run_campaign_aggregation(db)
-
-        # 5번 수정: jsonb_array_length 사용
         interested_in_db = (
             db.query(EventRaw)
             .filter(func.jsonb_array_length(EventRaw.look_times) > 0)
@@ -124,8 +118,6 @@ class TestAggregation:
     def test_campaign_agg_attention_rate_tracks(self, client, db, seed):
         send_all_segments(client, seed)
         db.expire_all()
-        run_campaign_aggregation(db)
-
         for agg in db.query(CampaignAgg).all():
             expected = round(agg.interested_count / agg.exposure_count, 4)
             assert agg.attention_rate_tracks == expected
@@ -133,18 +125,47 @@ class TestAggregation:
     def test_campaign_agg_중복_실행시_UPDATE(self, client, db, seed):
         send_all_segments(client, seed)
         db.expire_all()
-
-        run_campaign_aggregation(db)
         count_before = db.query(CampaignAgg).count()
-
         run_campaign_aggregation(db)
         count_after = db.query(CampaignAgg).count()
-
         assert count_before == count_after
 
     def test_데이터_없으면_집계_스킵(self, db, seed):
         run_campaign_aggregation(db)
         assert db.query(CampaignAgg).count() == 0
+
+    def test_daily_agg_자동생성(self, client, db, seed):
+        payload = inject_device_id(load_segment("segment_000.json"), str(seed["device_id"]))
+        client.post("/events/", json=payload)
+        db.expire_all()
+        assert db.query(DailyAgg).count() > 0
+
+    def test_hourly_agg_자동생성(self, client, db, seed):
+        payload = inject_device_id(load_segment("segment_000.json"), str(seed["device_id"]))
+        client.post("/events/", json=payload)
+        db.expire_all()
+        assert db.query(HourlyAgg).count() > 0
+
+    def test_daily_agg_exposure_count(self, client, db, seed):
+        send_all_segments(client, seed)
+        db.expire_all()
+        total_tracks   = db.query(EventRaw).count()
+        total_exposure = sum(r.exposure_count for r in db.query(DailyAgg).all())
+        assert total_exposure == total_tracks
+
+    def test_daily_agg_중복_실행시_UPDATE(self, client, db, seed):
+        send_all_segments(client, seed)
+        db.expire_all()
+        count_before = db.query(DailyAgg).count()
+        run_daily_aggregation(db, target_date=TARGET_DATE)
+        count_after = db.query(DailyAgg).count()
+        assert count_before == count_after
+
+    def test_hourly_agg_24시간_범위(self, client, db, seed):
+        send_all_segments(client, seed)
+        db.expire_all()
+        hours = [r.hour for r in db.query(HourlyAgg).all()]
+        assert all(0 <= h <= 23 for h in hours)
 
 
 # ── 3단계: GET /events/ 조회 테스트 ──────────────────────────────────────────
@@ -180,7 +201,6 @@ class TestStats:
     def _setup(self, client, db, seed):
         send_all_segments(client, seed)
         db.expire_all()
-        run_campaign_aggregation(db)
 
     # ── campaign ──────────────────────────────────────────────────────────────
 
@@ -227,7 +247,6 @@ class TestStats:
             points              = [[10, 20], [30, 40], [50, 60]],
         ))
         db.commit()
-
         res = client.get(f"/stats/golden-zone/?campaign_id={campaign_id}&device_id={seed['device_id']}")
         assert res.status_code == 200
         data = res.json()
@@ -238,7 +257,7 @@ class TestStats:
     # ── range ─────────────────────────────────────────────────────────────────
 
     def test_range_정상_조회(self, client, db, seed):
-        send_all_segments(client, seed)
+        self._setup(client, db, seed)
         campaign_id = seed["campaign_ids"][0]
         res = client.get(
             f"/stats/range/?start_date=2026-04-01&end_date=2026-04-30"

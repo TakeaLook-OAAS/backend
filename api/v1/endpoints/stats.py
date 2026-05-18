@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database.database import get_db
 import database.models as models, database.schemas as schemas
-from Aggregation.aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
 from Aggregation.golden_zone import run_golden_zone
 
 router = APIRouter()
@@ -155,8 +154,8 @@ def get_golden_zone(
 @router.get(
     "/range/",
     response_model=schemas.RangeStatsResponse,
-    summary="기간별 집계 조회 (실시간 계산)",
-    description="기본 지표 + 고급 지표 + hourly/daily 추이를 한 번에 반환합니다.",
+    summary="기간별 집계 조회",
+    description="daily_aggs / hourly_aggs 사전 집계 테이블 기반으로 빠르게 반환합니다.",
 )
 def get_range_stats(
     start_date:  date,
@@ -170,88 +169,111 @@ def get_range_stats(
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
 
-    device_campaign = (
-        db.query(models.DeviceCampaign)
-        .filter_by(device_id=device_id, campaign_id=campaign_id)
-        .first()
-    )
-    if not device_campaign:
+    if not db.query(models.DeviceCampaign).filter_by(device_id=device_id, campaign_id=campaign_id).first():
         raise HTTPException(status_code=404, detail="등록되지 않은 device-campaign 조합입니다.")
 
-    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
-
-    start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
-    end_dt   = datetime(end_date.year,   end_date.month,   end_date.day,   tzinfo=KST) + timedelta(days=1)
-
-    query = (
-        db.query(models.EventRaw)
-        .filter(
-            models.EventRaw.device_id   == device_id,
-            models.EventRaw.campaign_id == campaign_id,
-            models.EventRaw.ts >= start_dt,
-            models.EventRaw.ts <  end_dt,
-        )
+    # ── DailyAgg 조회 ────────────────────────────────────────────────────────
+    daily_query = db.query(models.DailyAgg).filter(
+        models.DailyAgg.device_id   == device_id,
+        models.DailyAgg.campaign_id == campaign_id,
+        models.DailyAgg.date >= start_date,
+        models.DailyAgg.date <= end_date,
     )
-
     if age_group:
-        query = query.filter(models.EventRaw.age_group == age_group)
+        daily_query = daily_query.filter(models.DailyAgg.age_group == age_group)
     if gender:
-        query = query.filter(models.EventRaw.gender == gender)
+        daily_query = daily_query.filter(models.DailyAgg.gender == gender)
 
-    rows = query.all()
+    daily_rows = daily_query.all()
 
-    empty_summary = {
-        "exposure_count": 0, "avg_dwell_time_ms": 0.0, "interested_count": 0,
-        "attention_rate_tracks": 0.0, "total_attention_time_ms": 0.0,
-        "attention_rate_times": 0.0, "count_10s": 0, "count_20s": 0,
-        "count_30s": 0, "count_40s": 0, "count_50s_plus": 0,
-        "count_60s_plus": 0, "count_male": 0, "count_female": 0,
-    }
-    empty_advanced = {
-        "avg_revisit_count":       0.0,
-        "avg_fixation_latency_ms": None,
-        "viewability_score":       0.0,
-        "avg_attention_time_ms":   0.0,
-        "peak_hour":               None,
-        "target_match_rate":       None,
-    }
+    # ── 지표 계산 ─────────────────────────────────────────────────────────────
+    total_exposure   = sum(r.exposure_count for r in daily_rows)
+    total_interested = sum(r.interested_count for r in daily_rows)
+    total_dwell      = sum(r.total_dwell_ms for r in daily_rows)
+    total_attention  = sum(r.total_attention_ms for r in daily_rows)
 
-    summary  = _build_agg_counts(rows)                    if rows else empty_summary
-    advanced = _build_advanced_agg_counts(rows, campaign) if rows else empty_advanced
+    avg_dwell_time_ms     = round(total_dwell / total_exposure, 2)       if total_exposure   > 0 else 0.0
+    attention_rate_tracks = round(total_interested / total_exposure, 4)  if total_exposure   > 0 else 0.0
+    attention_rate_times  = round(total_attention / total_dwell, 4)      if total_dwell      > 0 else 0.0
+    avg_attention_time_ms = round(total_attention / total_interested, 2) if total_interested > 0 else 0.0
+    viewability_score     = round(attention_rate_tracks * avg_attention_time_ms, 4)
 
-    # hourly_trend — 00~23시 24개 고정 (KST 기준)
-    hour_map: dict[int, dict] = {h: {"exposure_count": 0, "interested_count": 0} for h in range(24)}
-    for row in rows:
-        kst_hour = row.ts.astimezone(KST).hour
-        hour_map[kst_hour]["exposure_count"]  += 1
-        hour_map[kst_hour]["interested_count"] += 1 if row.look_times else 0
+    revisit_tracks    = sum(r.revisit_track_count for r in daily_rows)
+    total_revisits    = sum(r.total_revisit_look_count for r in daily_rows)
+    avg_revisit_count = round(total_revisits / revisit_tracks, 4) if revisit_tracks > 0 else 0.0
 
-    hourly_trend = [
-        {"hour": f"{h:02d}", **hour_map[h]}
-        for h in range(24)
-    ]
+    lat_sum   = sum(r.total_fixation_latency_ms for r in daily_rows if r.total_fixation_latency_ms is not None)
+    lat_count = sum(r.fixation_latency_count for r in daily_rows)
+    avg_fixation_latency_ms = round(lat_sum / lat_count, 2) if lat_count > 0 else None
 
-    # daily_trend — 데이터 있는 날짜만, 오름차순
+    matched_list      = [r.target_matched_count for r in daily_rows if r.target_matched_count is not None]
+    target_match_rate = round(sum(matched_list) / total_interested, 4) if matched_list and total_interested > 0 else None
+
+    count_10s      = sum(r.exposure_count for r in daily_rows if r.age_group == "10-19")
+    count_20s      = sum(r.exposure_count for r in daily_rows if r.age_group == "20-29")
+    count_30s      = sum(r.exposure_count for r in daily_rows if r.age_group == "30-39")
+    count_40s      = sum(r.exposure_count for r in daily_rows if r.age_group == "40-49")
+    count_50s_plus = sum(r.exposure_count for r in daily_rows if r.age_group == "50-59")
+    count_60s_plus = sum(r.exposure_count for r in daily_rows if r.age_group == "60+")
+    count_male     = sum(r.exposure_count for r in daily_rows if r.gender == "male")
+    count_female   = sum(r.exposure_count for r in daily_rows if r.gender == "female")
+
+    # ── HourlyAgg 조회 → hourly_trend + peak_hour ────────────────────────────
+    hourly_query = db.query(models.HourlyAgg).filter(
+        models.HourlyAgg.device_id   == device_id,
+        models.HourlyAgg.campaign_id == campaign_id,
+        models.HourlyAgg.date >= start_date,
+        models.HourlyAgg.date <= end_date,
+    )
+    if age_group:
+        hourly_query = hourly_query.filter(models.HourlyAgg.age_group == age_group)
+    if gender:
+        hourly_query = hourly_query.filter(models.HourlyAgg.gender == gender)
+
+    hour_map = {h: {"exposure_count": 0, "interested_count": 0} for h in range(24)}
+    for r in hourly_query.all():
+        hour_map[r.hour]["exposure_count"]  += r.exposure_count
+        hour_map[r.hour]["interested_count"] += r.interested_count
+
+    hourly_trend = [{"hour": f"{h:02d}", **hour_map[h]} for h in range(24)]
+    peak_hour    = max(hour_map, key=lambda h: hour_map[h]["exposure_count"]) if total_exposure > 0 else None
+
+    # ── daily_trend ───────────────────────────────────────────────────────────
     date_map: dict[str, dict] = {}
-    for row in rows:
-        kst_date = str(row.ts.astimezone(KST).date())
-        if kst_date not in date_map:
-            date_map[kst_date] = {"exposure_count": 0, "interested_count": 0}
-        date_map[kst_date]["exposure_count"]  += 1
-        date_map[kst_date]["interested_count"] += 1 if row.look_times else 0
+    for r in daily_rows:
+        d = str(r.date)
+        if d not in date_map:
+            date_map[d] = {"exposure_count": 0, "interested_count": 0}
+        date_map[d]["exposure_count"]  += r.exposure_count
+        date_map[d]["interested_count"] += r.interested_count
 
-    daily_trend = [
-        {"date": d, **date_map[d]}
-        for d in sorted(date_map.keys())
-    ]
+    daily_trend = [{"date": d, **date_map[d]} for d in sorted(date_map.keys())]
 
     return {
         "start_date":  str(start_date),
         "end_date":    str(end_date),
         "device_id":   str(device_id),
         "campaign_id": str(campaign_id),
-        **summary,
-        **advanced,
+        "exposure_count":          total_exposure,
+        "avg_dwell_time_ms":       avg_dwell_time_ms,
+        "interested_count":        total_interested,
+        "attention_rate_tracks":   attention_rate_tracks,
+        "total_attention_time_ms": float(total_attention),
+        "attention_rate_times":    attention_rate_times,
+        "count_10s":      count_10s,
+        "count_20s":      count_20s,
+        "count_30s":      count_30s,
+        "count_40s":      count_40s,
+        "count_50s_plus": count_50s_plus,
+        "count_60s_plus": count_60s_plus,
+        "count_male":     count_male,
+        "count_female":   count_female,
+        "avg_revisit_count":       avg_revisit_count,
+        "avg_fixation_latency_ms": avg_fixation_latency_ms,
+        "viewability_score":       viewability_score,
+        "avg_attention_time_ms":   avg_attention_time_ms,
+        "peak_hour":               peak_hour,
+        "target_match_rate":       target_match_rate,
         "hourly_trend": hourly_trend,
         "daily_trend":  daily_trend,
     }
