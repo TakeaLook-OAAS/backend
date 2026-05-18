@@ -7,6 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from database.database import get_db
 import database.models as models, database.schemas as schemas
 from database.enums import DeviceStatus
+from Aggregation.Aggregation import run_campaign_aggregation, run_daily_aggregation
+
+KST = timezone(timedelta(hours=9))
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -160,6 +163,11 @@ def create_events(event_in: schemas.EventBatchCreate, db: Session = Depends(get_
         db.rollback()
         logger.error("DB 저장 실패: %s", e)
         raise HTTPException(status_code=500, detail="DB 저장 중 오류가 발생했습니다.")
+    
+    # 세그먼트 수신 시 집계 실행
+    ts_date = ts.astimezone(KST).date()
+    run_daily_aggregation(db, target_date=ts_date, campaign_id=campaign_id, device_id=device_id)
+    run_campaign_aggregation(db, campaign_id=campaign_id)
 
     return schemas.EventBatchResponse(inserted=len(rows))
 
