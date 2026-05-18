@@ -189,8 +189,8 @@ def get_range_stats(
     # ── 지표 계산 ─────────────────────────────────────────────────────────────
     total_exposure   = sum(r.exposure_count for r in daily_rows)
     total_interested = sum(r.interested_count for r in daily_rows)
-    total_dwell      = sum(r.total_dwell_ms for r in daily_rows)
-    total_attention  = sum(r.total_attention_ms for r in daily_rows)
+    total_dwell     = sum(r.total_dwell_ms or 0 for r in daily_rows)
+    total_attention = sum(r.total_attention_ms or 0 for r in daily_rows)
 
     avg_dwell_time_ms     = round(total_dwell / total_exposure, 2)       if total_exposure   > 0 else 0.0
     attention_rate_tracks = round(total_interested / total_exposure, 4)  if total_exposure   > 0 else 0.0

@@ -7,7 +7,6 @@ from sqlalchemy.exc import IntegrityError
 from database.database import get_db
 import database.models as models, database.schemas as schemas
 from database.enums import DeviceStatus
-from datetime import timezone, timedelta
 from Aggregation.Aggregation import run_campaign_aggregation, run_daily_aggregation
 
 KST = timezone(timedelta(hours=9))

@@ -83,8 +83,8 @@ def run_daily_aggregation(
         values = dict(
             exposure_count            = len(group_rows),
             interested_count          = len(interested_rows),
-            total_dwell_ms            = sum(r.exposure_ms for r in group_rows),
-            total_attention_ms        = sum(r.total_look_duration_ms for r in interested_rows),
+            total_dwell_ms      = sum(r.exposure_ms or 0 for r in group_rows),
+            total_attention_ms  = sum(r.total_look_duration_ms or 0 for r in interested_rows),
             revisit_track_count       = len(revisit_rows),
             total_revisit_look_count  = sum(len(r.look_times) for r in revisit_rows),
             total_fixation_latency_ms = float(sum(fixation_latencies)) if fixation_latencies else None,
