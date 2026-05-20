@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from database.database import get_db
 import database.models as models, database.schemas as schemas
 from database.enums import DeviceStatus
+from core.deps import get_current_user
 from Aggregation.Aggregation import run_campaign_aggregation, run_daily_aggregation
 
 KST = timezone(timedelta(hours=9))
@@ -185,6 +186,7 @@ def list_events(
     campaign_id: uuid.UUID | None = None,   # 특정 캠페인 데이터만 조회
     limit:       int = Query(default=100, ge=1, le=1000),  # 최대 반환 행 수 (1~1000)
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Raw event 조회 API:
@@ -192,7 +194,8 @@ def list_events(
     - ts 내림차순 (최신 데이터 우선)
     - limit으로 반환 행 수 제한
     """
-    query = db.query(models.EventRaw)
+    query = db.query(models.EventRaw).join(models.Campaign)
+    query = query.filter(models.Campaign.user_id == current_user.id)
 
     # 기기 필터 적용
     if device_id:

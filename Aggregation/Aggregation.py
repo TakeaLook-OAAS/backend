@@ -5,6 +5,7 @@ from sqlalchemy import func
 from database.models import EventRaw, CampaignAgg, DailyAgg, HourlyAgg
 from Aggregation.golden_zone import run_golden_zone, save_golden_zone
 from Aggregation.aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
+from Aggregation.constants import DBSCAN_EPS, DBSCAN_MIN_SAMPLES, DBSCAN_N_INTERP
 import database.models as models
 
 logger = logging.getLogger(__name__)
@@ -209,12 +210,12 @@ def run_dbscan_aggregation(db: Session) -> None:
             )
             .all()
         )
-        result = run_golden_zone(rows=rows, eps=100.0, min_samples=10, n_interp=5)
+        result = run_golden_zone(rows=rows, eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES, n_interp=DBSCAN_N_INTERP)
 
         if result["status"] == "ok":
             save_golden_zone(
                 result=result, campaign_id=camp_id, device_id=dev_id,
-                eps=100.0, min_samples=10, n_interp=5, db=db,
+                eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES, n_interp=DBSCAN_N_INTERP, db=db,
             )
             logger.info(f"[DbscanAgg] 저장 완료 | device={dev_id} | campaign={camp_id}")
         else:

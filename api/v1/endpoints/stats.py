@@ -8,6 +8,8 @@ from typing import Optional
 from database.database import get_db
 import database.models as models, database.schemas as schemas
 from Aggregation.golden_zone import run_golden_zone
+from Aggregation.constants import DBSCAN_EPS, DBSCAN_MIN_SAMPLES, DBSCAN_N_INTERP
+from core.deps import get_current_user
 
 router = APIRouter()
 
@@ -38,8 +40,10 @@ def get_campaign_aggs(
     campaign_id: Optional[uuid.UUID] = None,
     limit:       int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
-    query = db.query(models.CampaignAgg)
+    query = db.query(models.CampaignAgg).join(models.Campaign)
+    query = query.filter(models.Campaign.user_id == current_user.id)
 
     if device_id:
         query = query.filter(models.CampaignAgg.device_id == device_id)
@@ -68,7 +72,12 @@ def get_golden_zone(
     start_date: Optional[date] = None,
     end_date:   Optional[date] = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
     # 날짜 범위 지정: events_raw에서 직접 DBSCAN 실행
     if start_date or end_date:
         query = (
@@ -90,7 +99,7 @@ def get_golden_zone(
         if not rows:
             raise HTTPException(status_code=404, detail="해당 기간에 look_times 데이터가 없습니다.")
 
-        result = run_golden_zone(rows=rows, eps=100.0, min_samples=50, n_interp=2)
+        result = run_golden_zone(rows=rows, eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES, n_interp=DBSCAN_N_INTERP)
         if result["status"] != "ok":
             raise HTTPException(
                 status_code=404,
@@ -165,12 +174,17 @@ def get_range_stats(
     age_group:   Optional[str] = None,
     gender:      Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
 
     if not db.query(models.DeviceCampaign).filter_by(device_id=device_id, campaign_id=campaign_id).first():
         raise HTTPException(status_code=404, detail="등록되지 않은 device-campaign 조합입니다.")
+
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     # ── DailyAgg 조회 ────────────────────────────────────────────────────────
     daily_query = db.query(models.DailyAgg).filter(
