@@ -303,6 +303,31 @@ class DailyAgg(Base):
     campaign = relationship("Campaign")
 
 
+# 6-1. 일별 노출·주목 시간 분포 집계 (히스토그램 버킷)
+class DailyDistributionAgg(Base):
+    __tablename__ = "daily_distribution_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    date        = Column(Date, nullable=False)
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    age_group   = Column(String(20), nullable=True)
+    gender      = Column(String(10), nullable=True)
+    bucket      = Column(String(10), nullable=False)  # e.g. "0~1s", "1~2s", ..., "25s+"
+
+    dwell_count    = Column(Integer, nullable=False, default=0)
+    fixation_count = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("date", "device_id", "campaign_id", "age_group", "gender", "bucket", name="uq_daily_dist_agg"),
+    )
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
+
+
 # 7. 캠페인 전체 기간 기본 집계
 class CampaignAgg(AggMixin, Base):
     __tablename__ = "campaign_aggs"

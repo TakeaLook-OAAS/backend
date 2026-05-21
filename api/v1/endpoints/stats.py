@@ -158,6 +158,56 @@ def get_golden_zone(
     )
 
 
+# ── GET /stats/distribution/ ──────────────────────────────────────────────────
+
+BUCKET_ORDER = [f"{i}~{i+1}s" for i in range(25)] + ["25s+"]
+
+@router.get(
+    "/distribution/",
+    response_model=schemas.DistributionResponse,
+    summary="노출·주목 시간 분포 조회",
+    description="daily_distribution_aggs 기반 히스토그램 버킷 데이터를 반환합니다.",
+)
+def get_distribution(
+    start_date:  date,
+    end_date:    date,
+    device_id:   uuid.UUID,
+    campaign_id: uuid.UUID,
+    age_group:   Optional[str] = None,
+    gender:      Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    query = db.query(models.DailyDistributionAgg).filter(
+        models.DailyDistributionAgg.device_id   == device_id,
+        models.DailyDistributionAgg.campaign_id == campaign_id,
+        models.DailyDistributionAgg.date >= start_date,
+        models.DailyDistributionAgg.date <= end_date,
+    )
+    if age_group:
+        query = query.filter(models.DailyDistributionAgg.age_group == age_group)
+    if gender:
+        query = query.filter(models.DailyDistributionAgg.gender == gender)
+
+    bucket_map: dict[str, dict] = {}
+    for row in query.all():
+        if row.bucket not in bucket_map:
+            bucket_map[row.bucket] = {"dwell_count": 0, "fixation_count": 0}
+        bucket_map[row.bucket]["dwell_count"]    += row.dwell_count
+        bucket_map[row.bucket]["fixation_count"] += row.fixation_count
+
+    buckets = [
+        schemas.DistributionBucket(bucket=b, **bucket_map[b])
+        for b in BUCKET_ORDER
+        if b in bucket_map
+    ]
+    return schemas.DistributionResponse(buckets=buckets)
+
+
 # ── GET /stats/range/ ─────────────────────────────────────────────────────────
 
 @router.get(
@@ -257,9 +307,11 @@ def get_range_stats(
     for r in daily_rows:
         d = str(r.date)
         if d not in date_map:
-            date_map[d] = {"exposure_count": 0, "interested_count": 0}
-        date_map[d]["exposure_count"]  += r.exposure_count
-        date_map[d]["interested_count"] += r.interested_count
+            date_map[d] = {"exposure_count": 0, "interested_count": 0, "total_dwell_ms": 0, "total_attention_ms": 0}
+        date_map[d]["exposure_count"]    += r.exposure_count
+        date_map[d]["interested_count"]  += r.interested_count
+        date_map[d]["total_dwell_ms"]    += r.total_dwell_ms or 0
+        date_map[d]["total_attention_ms"] += r.total_attention_ms or 0
 
     daily_trend = [{"date": d, **date_map[d]} for d in sorted(date_map.keys())]
 
