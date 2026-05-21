@@ -292,6 +292,20 @@ class DailyTrend(BaseModel):
     date:             str
     exposure_count:   int
     interested_count: int
+    total_dwell_ms:   int
+    total_attention_ms: int
+
+
+# ── GET /stats/distribution/ 응답 ────────────────────────────────────────────
+
+class DistributionBucket(BaseModel):
+    bucket:         str
+    dwell_count:    int
+    fixation_count: int
+
+
+class DistributionResponse(BaseModel):
+    buckets: List[DistributionBucket]
 
 
 # ── GET /campaigns/ 응답 ─────────────────────────────────────────────────────
