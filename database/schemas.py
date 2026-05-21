@@ -216,6 +216,56 @@ class CampaignAggListResponse(BaseModel):
     total:   int
 
 
+# ── 광고 신청 (Apply) ──────────────────────────────────────────────────────────
+
+class SlotItemSchema(BaseModel):
+    length: Optional[int] = None
+    mine: bool
+
+class SlotConfigSchema(BaseModel):
+    adLength: Optional[int] = None
+    slots: List[SlotItemSchema]
+
+class AddressItemSchema(BaseModel):
+    addr: str
+    label: str
+
+class ApplicationCreate(BaseModel):
+    brand:        str
+    company:      str
+    category:     str
+    start_date:   date
+    end_date:     date
+    start_time:   str        # "HH:MM"
+    end_time:     str        # "HH:MM"
+    slot_configs: List[SlotConfigSchema]
+    placement:    str
+    addresses:    List[AddressItemSchema]
+    age:          str        # 단일 값 (예: "20-29") 또는 "all"
+    gender:       str        # "all" | "m" | "f"
+    name:         str
+    phone:        str
+    email:        str
+
+class ApplicationResponse(BaseModel):
+    id:         str
+    name:       str
+    status:     str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def enum_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v
+
+
 class DbscanInfo(BaseModel):
     eps:           float
     min_samples:   int

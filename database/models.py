@@ -87,6 +87,19 @@ class Campaign(Base):
     target_age_group = Column(String(20), nullable=True)   # 예: "20-29"
     target_gender    = Column(String(10), nullable=True)   # "male" / "female"
 
+    # Apply 폼 전용 컬럼 (nullable — admin이 직접 생성한 캠페인에는 없음)
+    brand         = Column(String(40),   nullable=True)
+    company       = Column(String(60),   nullable=True)
+    category      = Column(String(20),   nullable=True)
+    placement     = Column(String(10),   nullable=True)   # "indoor" | "outdoor"
+    start_time    = Column(String(5),    nullable=True)   # "HH:MM"
+    end_time      = Column(String(5),    nullable=True)   # "HH:MM"
+    slot_configs  = Column(JSONB,        nullable=True)   # [{adLength, slots:[{length,mine}]}]
+    addresses     = Column(JSONB,        nullable=True)   # [{addr, label}]
+    contact_name  = Column(String(30),   nullable=True)
+    contact_phone = Column(String(30),   nullable=True)
+    contact_email = Column(String(255),  nullable=True)
+
     __table_args__ = (
         CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
         CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
@@ -97,6 +110,10 @@ class Campaign(Base):
         CheckConstraint(
             "target_gender IN ('male', 'female') OR target_gender IS NULL",
             name="chk_campaign_target_gender"
+        ),
+        CheckConstraint(
+            "placement IN ('indoor', 'outdoor') OR placement IS NULL",
+            name="chk_campaign_placement"
         ),
     )
 
