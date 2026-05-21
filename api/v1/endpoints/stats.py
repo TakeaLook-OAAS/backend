@@ -158,57 +158,9 @@ def get_golden_zone(
     )
 
 
-# ── GET /stats/distribution/ ──────────────────────────────────────────────────
-
-BUCKET_ORDER = [f"{i}~{i+1}s" for i in range(25)] + ["25s+"]
-
-@router.get(
-    "/distribution/",
-    response_model=schemas.DistributionResponse,
-    summary="노출·주목 시간 분포 조회",
-    description="daily_distribution_aggs 기반 히스토그램 버킷 데이터를 반환합니다.",
-)
-def get_distribution(
-    start_date:  date,
-    end_date:    date,
-    device_id:   uuid.UUID,
-    campaign_id: uuid.UUID,
-    age_group:   Optional[str] = None,
-    gender:      Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
-):
-    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
-    if not campaign or campaign.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
-
-    query = db.query(models.DailyDistributionAgg).filter(
-        models.DailyDistributionAgg.device_id   == device_id,
-        models.DailyDistributionAgg.campaign_id == campaign_id,
-        models.DailyDistributionAgg.date >= start_date,
-        models.DailyDistributionAgg.date <= end_date,
-    )
-    if age_group:
-        query = query.filter(models.DailyDistributionAgg.age_group == age_group)
-    if gender:
-        query = query.filter(models.DailyDistributionAgg.gender == gender)
-
-    bucket_map: dict[str, dict] = {}
-    for row in query.all():
-        if row.bucket not in bucket_map:
-            bucket_map[row.bucket] = {"dwell_count": 0, "fixation_count": 0}
-        bucket_map[row.bucket]["dwell_count"]    += row.dwell_count
-        bucket_map[row.bucket]["fixation_count"] += row.fixation_count
-
-    buckets = [
-        schemas.DistributionBucket(bucket=b, **bucket_map[b])
-        for b in BUCKET_ORDER
-        if b in bucket_map
-    ]
-    return schemas.DistributionResponse(buckets=buckets)
-
-
 # ── GET /stats/range/ ─────────────────────────────────────────────────────────
+
+_BUCKET_ORDER = [f"{i}~{i+1}s" for i in range(25)] + ["25s+"]
 
 @router.get(
     "/range/",
@@ -315,6 +267,31 @@ def get_range_stats(
 
     daily_trend = [{"date": d, **date_map[d]} for d in sorted(date_map.keys())]
 
+    # ── DailyDistributionAgg 조회 ─────────────────────────────────────────────
+    dist_query = db.query(models.DailyDistributionAgg).filter(
+        models.DailyDistributionAgg.device_id   == device_id,
+        models.DailyDistributionAgg.campaign_id == campaign_id,
+        models.DailyDistributionAgg.date >= start_date,
+        models.DailyDistributionAgg.date <= end_date,
+    )
+    if age_group:
+        dist_query = dist_query.filter(models.DailyDistributionAgg.age_group == age_group)
+    if gender:
+        dist_query = dist_query.filter(models.DailyDistributionAgg.gender == gender)
+
+    bucket_map: dict[str, dict] = {}
+    for row in dist_query.all():
+        if row.bucket not in bucket_map:
+            bucket_map[row.bucket] = {"dwell_count": 0, "fixation_count": 0}
+        bucket_map[row.bucket]["dwell_count"]    += row.dwell_count
+        bucket_map[row.bucket]["fixation_count"] += row.fixation_count
+
+    distribution = [
+        schemas.DistributionBucket(bucket=b, **bucket_map[b])
+        for b in _BUCKET_ORDER
+        if b in bucket_map
+    ]
+
     return {
         "start_date":  str(start_date),
         "end_date":    str(end_date),
@@ -342,4 +319,5 @@ def get_range_stats(
         "target_match_rate":       target_match_rate,
         "hourly_trend": hourly_trend,
         "daily_trend":  daily_trend,
+        "distribution": distribution,
     }

@@ -371,6 +371,7 @@ class RangeStatsResponse(AggBase):
     # 추이
     hourly_trend: List[HourlyTrend]
     daily_trend:  List[DailyTrend]
+    distribution: List[DistributionBucket]
 
 class CampaignCreate(BaseModel):
     name:             str
