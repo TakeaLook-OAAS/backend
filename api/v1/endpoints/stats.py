@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database.database import get_db
 import database.models as models, database.schemas as schemas
-from Aggregation.golden_zone import run_golden_zone
+from Aggregation.golden_zone import run_golden_zone, build_point_cloud
 from Aggregation.constants import DBSCAN_EPS, DBSCAN_MIN_SAMPLES, DBSCAN_N_INTERP
 from core.deps import get_current_user
 
@@ -154,6 +154,66 @@ def get_golden_zone(
         clusters = [
             schemas.GoldenZoneCluster(label=row.cluster_label, point_count=row.cluster_point_count, points=row.points)
             for row in agg_rows
+        ],
+    )
+
+
+# ── GET /stats/raw-points/ ───────────────────────────────────────────────────
+
+@router.get(
+    "/raw-points/",
+    response_model=schemas.GoldenZoneResponse,
+    summary="DBSCAN 전 원시 포인트 조회",
+)
+def get_raw_points(
+    campaign_id: uuid.UUID,
+    device_id:   uuid.UUID,
+    start_date: Optional[date] = None,
+    end_date:   Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    query = (
+        db.query(models.EventRaw)
+        .filter(
+            models.EventRaw.campaign_id == campaign_id,
+            models.EventRaw.device_id   == device_id,
+            func.jsonb_array_length(models.EventRaw.look_times) > 0,
+        )
+    )
+    if start_date:
+        start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+        query = query.filter(models.EventRaw.ts >= start_dt)
+    if end_date:
+        end_dt = datetime(end_date.year, end_date.month, end_date.day, tzinfo=KST) + timedelta(days=1)
+        query = query.filter(models.EventRaw.ts < end_dt)
+
+    rows = query.all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="해당 조건에 look_times 데이터가 없습니다.")
+
+    pts = build_point_cloud(rows, DBSCAN_N_INTERP)
+    if len(pts) == 0:
+        raise HTTPException(status_code=404, detail="포인트 데이터가 없습니다.")
+
+    return schemas.GoldenZoneResponse(
+        campaign_id = str(campaign_id),
+        device_id   = str(device_id),
+        computed_at = datetime.now(timezone.utc),
+        point_count = int(len(pts)),
+        event_count = len(rows),
+        dbscan      = schemas.DbscanInfo(
+            eps           = 0.0,
+            min_samples   = 0,
+            cluster_count = 1,
+            noise_count   = 0,
+        ),
+        clusters = [
+            schemas.GoldenZoneCluster(label=0, point_count=int(len(pts)), points=pts.tolist())
         ],
     )
 
