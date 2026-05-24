@@ -16,8 +16,8 @@ CAMPAIGN_ID = uuid.UUID("cccccccc-0000-0000-0000-000000000001")
 ADMIN_ID    = uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
 
 # ── 시드 데이터 ───────────────────────────────────────────────────────────────
-ADMIN_EMAIL    = "admin@oaas.com"
-ADMIN_PASSWORD = "admin1234"
+ADMIN_EMAIL    = "teamtakealook@naver.com"
+ADMIN_PASSWORD = "takealook"
 
 
 def seed():
