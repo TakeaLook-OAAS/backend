@@ -410,6 +410,16 @@ class RangeStatsResponse(AggBase):
     device_id:   str
     campaign_id: str
 
+    # 관심 인구 성별·연령 분포
+    interested_count_male:     int
+    interested_count_female:   int
+    interested_count_10s:      int
+    interested_count_20s:      int
+    interested_count_30s:      int
+    interested_count_40s:      int
+    interested_count_50s_plus: int
+    interested_count_60s_plus: int
+
     # 고급 지표
     avg_revisit_count:       float
     avg_fixation_latency_ms: Optional[float]
