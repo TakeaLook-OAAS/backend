@@ -294,6 +294,15 @@ def get_range_stats(
     count_male     = sum(r.exposure_count for r in daily_rows if r.gender == "male")
     count_female   = sum(r.exposure_count for r in daily_rows if r.gender == "female")
 
+    interested_count_male     = sum(r.interested_count for r in daily_rows if r.gender == "male")
+    interested_count_female   = sum(r.interested_count for r in daily_rows if r.gender == "female")
+    interested_count_10s      = sum(r.interested_count for r in daily_rows if r.age_group == "10-19")
+    interested_count_20s      = sum(r.interested_count for r in daily_rows if r.age_group == "20-29")
+    interested_count_30s      = sum(r.interested_count for r in daily_rows if r.age_group == "30-39")
+    interested_count_40s      = sum(r.interested_count for r in daily_rows if r.age_group == "40-49")
+    interested_count_50s_plus = sum(r.interested_count for r in daily_rows if r.age_group == "50-59")
+    interested_count_60s_plus = sum(r.interested_count for r in daily_rows if r.age_group == "60+")
+
     # ── HourlyAgg 조회 → hourly_trend + peak_hour ────────────────────────────
     hourly_query = db.query(models.HourlyAgg).filter(
         models.HourlyAgg.device_id   == device_id,
@@ -371,6 +380,14 @@ def get_range_stats(
         "count_60s_plus": count_60s_plus,
         "count_male":     count_male,
         "count_female":   count_female,
+        "interested_count_male":     interested_count_male,
+        "interested_count_female":   interested_count_female,
+        "interested_count_10s":      interested_count_10s,
+        "interested_count_20s":      interested_count_20s,
+        "interested_count_30s":      interested_count_30s,
+        "interested_count_40s":      interested_count_40s,
+        "interested_count_50s_plus": interested_count_50s_plus,
+        "interested_count_60s_plus": interested_count_60s_plus,
         "avg_revisit_count":       avg_revisit_count,
         "avg_fixation_latency_ms": avg_fixation_latency_ms,
         "viewability_score":       viewability_score,
