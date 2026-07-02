@@ -66,6 +66,8 @@ def seed():
             device_id=DEVICE_ID,
             campaign_id=CAMPAIGN_ID,
             cycle_index=0,
+            ad_duration_sec=15,   # 내 광고 15초
+            cycle_total_sec=60,   # 사이클 총 60초 → SOV = 0.25
         )
         db.add(dc)
 

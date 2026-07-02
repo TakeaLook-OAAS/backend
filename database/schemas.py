@@ -204,6 +204,7 @@ class CampaignAggResponse(AggBase):
     avg_attention_time_ms:   float
     peak_hour:               Optional[int]
     target_match_rate:       Optional[float]
+    sov:                     Optional[float] # sov
 
     @field_validator("device_id", "campaign_id", mode="before")
     @classmethod
