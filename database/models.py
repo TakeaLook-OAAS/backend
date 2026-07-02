@@ -133,6 +133,10 @@ class DeviceCampaign(Base):
     cycle_index = Column(Integer, nullable=False)
     created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
+    # SOV
+    ad_duration_sec = Column(Integer, nullable=True)  # 이 기기에서 내 광고 1회 재생 길이(초)
+    cycle_total_sec = Column(Integer, nullable=True)  # 이 기기 한 사이클 총 길이(초)
+
     __table_args__ = (
         UniqueConstraint("device_id", "cycle_index", name="uq_device_cycle"),
         UniqueConstraint("device_id", "campaign_id", name="uq_device_campaign"),
@@ -256,9 +260,10 @@ class AggMixin:
     avg_revisit_count       = Column(Float,   nullable=False, default=0.0)
     avg_fixation_latency_ms = Column(Float,   nullable=True)
     viewability_score       = Column(Float,   nullable=False, default=0.0)
-    avg_attention_time_ms   = Column(Float,   nullable=False, default=0.0)  # 추가
+    avg_attention_time_ms   = Column(Float,   nullable=False, default=0.0)
     peak_hour               = Column(Integer, nullable=True)
     target_match_rate       = Column(Float,   nullable=True)
+    sov                     = Column(Float,   nullable=True)
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

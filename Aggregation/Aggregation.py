@@ -2,7 +2,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from database.models import EventRaw, CampaignAgg, DailyAgg, HourlyAgg, DailyDistributionAgg
+from database.models import EventRaw, CampaignAgg, DailyAgg, HourlyAgg, DailyDistributionAgg, DeviceCampaign
 from Aggregation.golden_zone import run_golden_zone, save_golden_zone
 from Aggregation.aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
 from Aggregation.constants import DBSCAN_EPS, DBSCAN_MIN_SAMPLES, DBSCAN_N_INTERP
@@ -218,6 +218,15 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
             **_build_agg_counts(group_rows),
             **_build_advanced_agg_counts(group_rows, campaign),
         }
+
+        # SOV
+        dc = db.query(DeviceCampaign).filter_by(
+            device_id=dev_id, campaign_id=camp_id
+        ).first()
+        if dc and dc.ad_duration_sec and dc.cycle_total_sec and dc.cycle_total_sec > 0:
+            all_counts["sov"] = round(dc.ad_duration_sec / dc.cycle_total_sec, 4)
+        else:
+            all_counts["sov"] = None
 
         existing = db.query(CampaignAgg).filter_by(device_id=dev_id, campaign_id=camp_id).first()
         if existing:
