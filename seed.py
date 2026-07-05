@@ -18,6 +18,8 @@ ADMIN_ID    = uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001")
 # ── 시드 데이터 ───────────────────────────────────────────────────────────────
 ADMIN_EMAIL    = "teamtakealook@naver.com"
 ADMIN_PASSWORD = "takealook"
+USER_EMAIL     = "usertakealook@naver.com"
+USER_PASSWORD  = "takealook"
 
 
 def seed():
@@ -29,7 +31,7 @@ def seed():
             print("이미 시드 데이터가 존재합니다. 스킵합니다.")
             return
 
-        # 1. 관리자 유저
+        # 1. 관리자
         admin = User(
             id=ADMIN_ID,
             email=ADMIN_EMAIL,
@@ -39,6 +41,16 @@ def seed():
         )
         db.add(admin)
 
+        # 1-2. 일반 사용자
+        user = User(
+            id=uuid.UUID("bbbbbbbb-0000-0000-0000-000000000001"),
+            email=USER_EMAIL,
+            hashed_password=hash_password(USER_PASSWORD),
+            role=UserRole.USER,
+            is_active=True,
+        )
+        db.add(user)
+        
         # 2. 디바이스
         device = Device(
             id=DEVICE_ID,
