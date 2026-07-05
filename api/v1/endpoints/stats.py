@@ -241,9 +241,14 @@ def get_range_stats(
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
 
-    if not db.query(models.DeviceCampaign).filter_by(device_id=device_id, campaign_id=campaign_id).first():
-        raise HTTPException(status_code=404, detail="등록되지 않은 device-campaign 조합입니다.")
-
+    dc = db.query(models.DeviceCampaign).filter_by(device_id=device_id, campaign_id=campaign_id).first()
+    if not dc:
+        raise HTTPException(status_code=404, detail="해당 device_id와 campaign_id 조합이 존재하지 않습니다.")
+    # SOV 
+    if dc.ad_duration_sec and dc.cycle_total_sec and dc.cycle_total_sec > 0:
+        sov = round(dc.ad_duration_sec / dc.cycle_total_sec, 4)
+    else:
+        sov = None
     campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
     if not campaign or campaign.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
@@ -273,6 +278,13 @@ def get_range_stats(
     attention_rate_times  = round(total_attention / total_dwell, 4)      if total_dwell      > 0 else 0.0
     avg_attention_time_ms = round(total_attention / total_interested, 2) if total_interested > 0 else 0.0
     viewability_score     = round(attention_rate_tracks * avg_attention_time_ms, 4)
+    # ATE (ESOV) 계산
+    if sov and sov > 0:
+        attention_track_efficiency = round(attention_rate_tracks / sov, 4)
+        attention_time_efficiency  = round(avg_attention_time_ms / sov, 4)
+    else :
+        attention_track_efficiency = None
+        attention_time_efficiency  = None
 
     revisit_tracks    = sum(r.revisit_track_count for r in daily_rows)
     total_revisits    = sum(r.total_revisit_look_count for r in daily_rows)
@@ -334,8 +346,24 @@ def get_range_stats(
         date_map[d]["total_dwell_ms"]    += r.total_dwell_ms or 0
         date_map[d]["total_attention_ms"] += r.total_attention_ms or 0
 
-    daily_trend = [{"date": d, **date_map[d]} for d in sorted(date_map.keys())]
-
+    daily_trend = []
+    for d in sorted(date_map.keys()):
+        day = date_map[d]
+        # 일일 attention_rate 계산
+        day_track_rate = (day["interested_count"] / day["exposure_count"]) if day["exposure_count"] > 0 else 0.0
+        day_time_rate  = (day["total_attention_ms"] / day["total_attention_ms"]) if day["total_dwell_ms"] > 0 else 0.0
+        if sov and sov > 0:
+            day_track_eff = round(day_track_rate / sov, 4)
+            day_time_eff  = round(day_time_rate / sov, 4)
+        else:
+            day_track_eff = None
+            day_time_eff  = None
+        daily_trend.append({
+            "date" : d,
+            **day,
+            "attention_track_efficiency": day_track_eff,
+            "attention_time_efficiency":  day_time_eff,
+        })
     # ── DailyDistributionAgg 조회 ─────────────────────────────────────────────
     dist_query = db.query(models.DailyDistributionAgg).filter(
         models.DailyDistributionAgg.device_id   == device_id,
@@ -397,4 +425,7 @@ def get_range_stats(
         "hourly_trend": hourly_trend,
         "daily_trend":  daily_trend,
         "distribution": distribution,
+        "sov": sov,
+        "attention_track_efficiency": attention_track_efficiency,
+        "attention_time_efficiency":  attention_time_efficiency,
     }

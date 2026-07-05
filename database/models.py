@@ -263,7 +263,9 @@ class AggMixin:
     avg_attention_time_ms   = Column(Float,   nullable=False, default=0.0)
     peak_hour               = Column(Integer, nullable=True)
     target_match_rate       = Column(Float,   nullable=True)
-    sov                     = Column(Float,   nullable=True)
+    sov                     = Column(Float,   nullable=True) # sov
+    attention_track_efficiency = Column(Float,   nullable=False, default=0.0) # 사람 수 기준 점유율 대비 효율
+    attention_time_efficiency  = Column(Float,  nullable=False, default=0.0) # 시간 기준 점유율 대비 효율
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

@@ -205,7 +205,8 @@ class CampaignAggResponse(AggBase):
     peak_hour:               Optional[int]
     target_match_rate:       Optional[float]
     sov:                     Optional[float] # sov
-
+    attention_track_efficiency: Optional[float] # 사람 수 기준 점유율 대비 효율
+    attention_time_efficiency:  Optional[float] # 시간 기준 점유율 대비 효율
     @field_validator("device_id", "campaign_id", mode="before")
     @classmethod
     def uuid_to_str(cls, v):
@@ -345,6 +346,8 @@ class DailyTrend(BaseModel):
     interested_count: int
     total_dwell_ms:   int
     total_attention_ms: int
+    attention_track_efficiency : Optional[float] = None
+    attention_time_efficiency:  Optional[float] = None
 
 
 # ── GET /stats/distribution/ 응답 ────────────────────────────────────────────
@@ -428,6 +431,9 @@ class RangeStatsResponse(AggBase):
     avg_attention_time_ms:   float
     peak_hour:               Optional[int]
     target_match_rate:       Optional[float]
+    sov :                     Optional[float]
+    attention_track_efficiency : Optional[float] = None
+    attention_time_efficiency  : Optional[float] = None
 
     # 추이
     hourly_trend: List[HourlyTrend]
