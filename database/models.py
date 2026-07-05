@@ -13,7 +13,7 @@ from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKe
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from database.enums import DeviceStatus, CampaignStatus, UserRole
+from database.enums import DeviceStatus, CampaignStatus, UserRole, ChangeRequestStatus
 
 Base = declarative_base()
 
@@ -365,4 +365,26 @@ class CampaignAgg(AggMixin, Base):
     )
 
     device   = relationship("Device")
+    campaign = relationship("Campaign")
+
+
+# 8. 설정 변경 요청
+class ChangeRequest(Base):
+    __tablename__ = "change_requests"
+
+    id          = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    status      = Column(Enum(ChangeRequestStatus), nullable=False, default=ChangeRequestStatus.PENDING)
+
+    target_gender    = Column(String(10),  nullable=True)
+    target_age_group = Column(String(20),  nullable=True)
+    start_date       = Column(Date,        nullable=True)
+    end_date         = Column(Date,        nullable=True)
+    broadcast_start  = Column(String(5),   nullable=True)  # "HH:MM"
+    broadcast_end    = Column(String(5),   nullable=True)  # "HH:MM"
+    reason           = Column(String(500), nullable=True)
+
+    created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
     campaign = relationship("Campaign")

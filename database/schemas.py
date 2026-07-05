@@ -446,3 +446,51 @@ class CampaignCreate(BaseModel):
     end_date:         date
     target_age_group: Optional[str] = None
     target_gender:    Optional[str] = None
+
+
+
+
+# ── 설정 변경 요청 ─────────────────────────────────────────────────────────────
+
+class ChangeRequestCreate(BaseModel):
+    campaign_id:     str
+    target_gender:   Optional[str] = None
+    target_age_group: Optional[str] = None
+    start_date:      Optional[date] = None
+    end_date:        Optional[date] = None
+    broadcast_start: Optional[str] = None
+    broadcast_end:   Optional[str] = None
+    reason:          Optional[str] = None
+
+
+class ChangeRequestResponse(BaseModel):
+    id:              str
+    campaign_id:     str
+    campaign_name:   str
+    status:          str
+    target_gender:   Optional[str]
+    target_age_group: Optional[str]
+    start_date:      Optional[date]
+    end_date:        Optional[date]
+    broadcast_start: Optional[str]
+    broadcast_end:   Optional[str]
+    reason:          Optional[str]
+    created_at:      datetime
+    reviewed_at:     Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def enum_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v
+
+
+class ChangeRequestListResponse(BaseModel):
+    results: List[ChangeRequestResponse]
+    total:   int
