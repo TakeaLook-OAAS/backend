@@ -231,9 +231,9 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
 
         # 점유율 대비 효율
         sov = all_counts["sov"]
-        if sov and sov > 0; # sov가 0보다 크고 None이 아니라면
+        if sov and sov > 0: # sov가 0보다 크고 None이 아니라면
             all_counts["attention_track_efficiency"] = round(all_counts["attention_rate_tracks"] / sov, 4)
-            all_counts["attention_time_efficiency"]  = round(all_counts["attention_rate_time"] / sov, 4)
+            all_counts["attention_time_efficiency"]  = round(all_counts["attention_rate_times"] / sov, 4)
         else:
             all_counts["attention_track_efficiency"] = None
             all_counts["attention_time_efficiency"]  = None

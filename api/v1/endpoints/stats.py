@@ -281,7 +281,7 @@ def get_range_stats(
     # ATE (ESOV) 계산
     if sov and sov > 0:
         attention_track_efficiency = round(attention_rate_tracks / sov, 4)
-        attention_time_efficiency  = round(avg_attention_time_ms / sov, 4)
+        attention_time_efficiency  = round(attention_rate_times / sov, 4)
     else :
         attention_track_efficiency = None
         attention_time_efficiency  = None
@@ -351,7 +351,7 @@ def get_range_stats(
         day = date_map[d]
         # 일일 attention_rate 계산
         day_track_rate = (day["interested_count"] / day["exposure_count"]) if day["exposure_count"] > 0 else 0.0
-        day_time_rate  = (day["total_attention_ms"] / day["total_attention_ms"]) if day["total_dwell_ms"] > 0 else 0.0
+        day_time_rate  = (day["total_attention_ms"] / day["total_dwell_ms"]) if day["total_dwell_ms"] > 0 else 0.0
         if sov and sov > 0:
             day_track_eff = round(day_track_rate / sov, 4)
             day_time_eff  = round(day_time_rate / sov, 4)
