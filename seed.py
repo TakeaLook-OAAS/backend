@@ -50,7 +50,7 @@ def seed():
             is_active=True,
         )
         db.add(user)
-        
+
         # 2. 디바이스
         device = Device(
             id=DEVICE_ID,
@@ -86,6 +86,7 @@ def seed():
         db.commit()
         print("시드 완료:")
         print(f"  admin : {ADMIN_EMAIL} / {ADMIN_PASSWORD}")
+        print(f"  user  : {USER_EMAIL} / {USER_PASSWORD}")
         print(f"  device_id   : {DEVICE_ID}")
         print(f"  campaign_id : {CAMPAIGN_ID}")
         print(f"  cycle_index : 0 → campaign 연결됨")
