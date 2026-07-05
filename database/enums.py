@@ -17,3 +17,9 @@ class CampaignStatus(str, enum.Enum):
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
     USER = "USER"
+
+# 설정 변경 요청 상태
+class ChangeRequestStatus(str, enum.Enum):
+    PENDING  = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
