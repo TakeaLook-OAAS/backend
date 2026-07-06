@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -38,6 +39,18 @@ def create_change_request(
     campaign = db.query(Campaign).filter(Campaign.id == body.campaign_id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="캠페인을 찾을 수 없습니다.")
+    from database.enums import UserRole
+    if current_user.role != UserRole.ADMIN:
+        if campaign.user_id is None or campaign.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="본인 캠페인에만 변경 요청을 할 수 있습니다.")
+
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_count = db.query(ChangeRequest).filter(
+        ChangeRequest.campaign_id == body.campaign_id,
+        ChangeRequest.created_at >= today_start,
+    ).count()
+    if daily_count >= 3:
+        raise HTTPException(status_code=429, detail="하루 변경 요청 횟수(3회)를 초과했습니다.")
 
     existing = db.query(ChangeRequest).filter(
         ChangeRequest.campaign_id == body.campaign_id,

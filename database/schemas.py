@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
 
 
@@ -453,14 +453,14 @@ class CampaignCreate(BaseModel):
 # ── 설정 변경 요청 ─────────────────────────────────────────────────────────────
 
 class ChangeRequestCreate(BaseModel):
-    campaign_id:     str
-    target_gender:   Optional[str] = None
-    target_age_group: Optional[str] = None
-    start_date:      Optional[date] = None
-    end_date:        Optional[date] = None
-    broadcast_start: Optional[str] = None
-    broadcast_end:   Optional[str] = None
-    reason:          Optional[str] = None
+    campaign_id:      str
+    target_gender:    Optional[Literal["male", "female"]] = None
+    target_age_group: Optional[Literal["10-19", "20-29", "30-39", "40-49", "50-59", "60+"]] = None
+    start_date:       Optional[date] = None
+    end_date:         Optional[date] = None
+    broadcast_start:  Optional[str] = None
+    broadcast_end:    Optional[str] = None
+    reason:           Optional[str] = None
 
 
 class ChangeRequestResponse(BaseModel):
