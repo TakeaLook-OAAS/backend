@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, ConfigDict, computed_field
 from datetime import datetime, date
 from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+from pydantic import EmailStr
 
 
 # ── AI팀 JSON 내부 구조 ──────────────────────────────────────────────────────
@@ -494,3 +495,10 @@ class ChangeRequestResponse(BaseModel):
 class ChangeRequestListResponse(BaseModel):
     results: List[ChangeRequestResponse]
     total:   int
+
+# ── 이메일 형식 검증 ─────────────────────────────────────────────────────────────
+
+class InquiryCreate(BaseModel):
+    name:    str = Field(..., min_length=1, max_length=30)
+    email:   EmailStr
+    content: str = Field(..., min_length=1, max_length=2000)
