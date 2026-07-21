@@ -3,7 +3,7 @@ import os
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 FROM_EMAIL = "noreply@takealook.co.kr"
-
+ADMIN_EMAIL = "teamtakealook@naver.com"
 
 def send_verification_email(to_email: str, code: str) -> None:
     body = f"""안녕하세요, OAAS입니다.
@@ -21,6 +21,29 @@ def send_verification_email(to_email: str, code: str) -> None:
             "from": FROM_EMAIL,
             "to": [to_email],
             "subject": "[OAAS] 이메일 인증 코드",
+            "text": body,
+        },
+    )
+    response.raise_for_status()
+
+def send_inquiry_email(name : str, email : str, content : str) -> None:
+    body = f"""새로운 변경 요청이 있습니다.
+
+보낸 사람 : {name}
+이메일 : {email}
+
+────────────────────
+
+{content}"""
+
+    response = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+        json={
+            "from": FROM_EMAIL,
+            "to": [ADMIN_EMAIL],
+            "reply_to": email,
+            "subject": f"[OAAS 문의] {name}님의 변경 요청",
             "text": body,
         },
     )
