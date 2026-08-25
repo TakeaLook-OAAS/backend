@@ -59,6 +59,9 @@ class Device(Base):
     name       = Column(String(20), nullable=False, unique=True)
     status     = Column(Enum(DeviceStatus), nullable=False, default=DeviceStatus.ENABLE)
     timezone   = Column(String(32), nullable=False)
+    address    = Column(String(255), nullable=True)    # 지도 표시용 주소
+    latitude   = Column(Float, nullable=True)          # address 지오코딩 결과 (위도)
+    longitude  = Column(Float, nullable=True)          # address 지오코딩 결과 (경도)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     events           = relationship("EventRaw", back_populates="device")
