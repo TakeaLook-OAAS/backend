@@ -408,6 +408,30 @@ class CampaignListResponse(BaseModel):
     results: List[CampaignWithDevices]
     total:   int
 
+# ── 메인 페이지 지도 (기기 단위) ──────────────────────────────────────────────
+
+class DeviceMapMarker(BaseModel):
+    """
+    메인 페이지 지도에 찍을 마커 1개 = 기기 1개.
+    광고주가 신청서에서 이 기기의 주소를 선택(입력)한 적이 있는 기기만 대상.
+
+    status:
+      - "active"  (초록) — 이 기기에 연결된 캠페인 중 RUNNING 상태가 하나라도 있음
+      - "pending" (노랑) — 신청은 됐지만 아직 RUNNING인 캠페인이 없음 (심사중/일시정지 등)
+    """
+    device_id: str
+    name:      str
+    address:   str
+    latitude:  float
+    longitude: float
+    status:    Literal["active", "pending"]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DeviceMapResponse(BaseModel):
+    markers: List[DeviceMapMarker]
+
 
 class RangeStatsResponse(AggBase):
     start_date:  str
