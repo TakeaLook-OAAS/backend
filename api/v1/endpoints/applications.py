@@ -1,6 +1,7 @@
 import re
 import secrets
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database.database import get_db
@@ -71,16 +72,30 @@ def submit_application(
             except GeocodingError as e:
                 raise HTTPException(400, f"'{addr}' 주소의 좌표를 찾을 수 없습니다: {e}")
 
-            device = models.Device(
-                name=_generate_device_name(db),
-                address=addr,
-                latitude=latitude,
-                longitude=longitude,
-                timezone="Asia/Seoul",
-                status=DeviceStatus.MAINTENANCE,  # 아직 실제 설치 전 — 설치팀이 확인 후 ENABLE로 전환
-            )
-            db.add(device)
-            db.flush()  # 이후 device.id를 바로 참조하기 위해 flush (커밋은 아직 안 함)
+            # 동시에 두 요청이 같은 이름 후보를 뽑을 수 있으므로, 충돌 시 짧게 재시도한다.
+            # SAVEPOINT(begin_nested)로 감싸서, 실패해도 이번 기기 시도만 되돌아가고
+            # 같은 신청서에서 앞서 처리된 다른 주소의 기기는 영향받지 않는다.
+            MAX_RETRIES = 3
+            for attempt in range(MAX_RETRIES):
+                try:
+                    with db.begin_nested():
+                        device = models.Device(
+                            name=_generate_device_name(db),
+                            address=addr,
+                            latitude=latitude,
+                            longitude=longitude,
+                            timezone="Asia/Seoul",
+                            status=DeviceStatus.MAINTENANCE,  # 아직 실제 설치 전 — 설치팀이 확인 후 ENABLE로 전환
+                        )
+                        db.add(device)
+                        db.flush()  # 이후 device.id를 바로 참조하기 위해 flush (커밋은 아직 안 함)
+                    break
+                except IntegrityError:
+                    if attempt == MAX_RETRIES - 1:
+                        raise HTTPException(
+                            500, "기기 등록 중 이름 충돌이 반복되어 실패했습니다. 다시 시도해 주세요."
+                        )
+                    # 다음 루프에서 count()가 갱신된 값을 다시 읽어 새 후보를 만듦
 
         matched_devices[addr] = device
 

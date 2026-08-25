@@ -1,11 +1,17 @@
 """
-네이버 클라우드 플랫폼 API를 이용한 지오코딩 모듈
-- 주소 문자열 -> (위도, 경도) 좌표 변환
-- NCP_MAP_API_KEY_ID, NCP_MAP_API_KEY 환경변수 필요
+네이버 클라우드 플랫폼(NCP) Geocoding API 클라이언트.
+
+광고주가 캠페인 신청 시 입력하는 주소(campaigns.addresses)를 좌표로 변환해
+메인 페이지 지도에 표시하기 위한 용도입니다.
+
+필요 환경변수 (.env):
+    NCP_MAP_API_KEY_ID   — NCP 콘솔 > Maps > Application 등록 시 발급되는 Client ID
+    NCP_MAP_API_KEY      — 위와 함께 발급되는 Client Secret
 """
 import os
 import logging
 from typing import Optional
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -43,14 +49,22 @@ def geocode_address(address: str) -> tuple[float, float]:
         logger.error(f"[Geocoding] 네트워크 오류: {e} | address={address}")
         raise GeocodingError(f"네이버 지오코딩 API 요청 실패: {e}")
 
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError as e:
+        logger.error(f"[Geocoding] JSON 파싱 실패: address={address} | error={e}")
+        raise GeocodingError(f"네이버 지오코딩 응답이 올바른 JSON이 아닙니다: {e}")
 
     if data.get("status") != "OK" or not data.get("addresses"):
         logger.warning(f"[Geocoding] 주소 검색 결과 없음: address={address} | response={data}")
         raise GeocodingError(f"'{address}'에 대한 좌표를 찾을 수 없습니다.")
 
-    best = data["addresses"][0]
-    return float(best["y"]), float(best["x"])   # (latitude, longitude)
+    try:
+        best = data["addresses"][0]
+        return float(best["y"]), float(best["x"])   # (latitude, longitude)
+    except (ValueError, KeyError, TypeError) as e:
+        logger.error(f"[Geocoding] 응답 형식이 예상과 다름: address={address} | response={data} | error={e}")
+        raise GeocodingError(f"네이버 지오코딩 응답을 해석할 수 없습니다: {e}")
 
 
 def try_geocode_address(address: str) -> Optional[tuple[float, float]]:
