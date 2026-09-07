@@ -20,3 +20,6 @@ tests/
 
 #pem
 *.pem
+
+#coderabbit
+.coderabbit.yml

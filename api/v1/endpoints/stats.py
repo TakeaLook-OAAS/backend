@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database.database import get_db
 import database.models as models, database.schemas as schemas
-from Aggregation.golden_zone import run_golden_zone
+from Aggregation.golden_zone import run_golden_zone, build_point_cloud
+from Aggregation.constants import DBSCAN_EPS, DBSCAN_MIN_SAMPLES, DBSCAN_N_INTERP
+from core.deps import get_current_user
 
 router = APIRouter()
 
@@ -38,8 +40,10 @@ def get_campaign_aggs(
     campaign_id: Optional[uuid.UUID] = None,
     limit:       int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
-    query = db.query(models.CampaignAgg)
+    query = db.query(models.CampaignAgg).join(models.Campaign)
+    query = query.filter(models.Campaign.user_id == current_user.id)
 
     if device_id:
         query = query.filter(models.CampaignAgg.device_id == device_id)
@@ -68,7 +72,12 @@ def get_golden_zone(
     start_date: Optional[date] = None,
     end_date:   Optional[date] = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
     # 날짜 범위 지정: events_raw에서 직접 DBSCAN 실행
     if start_date or end_date:
         query = (
@@ -90,7 +99,7 @@ def get_golden_zone(
         if not rows:
             raise HTTPException(status_code=404, detail="해당 기간에 look_times 데이터가 없습니다.")
 
-        result = run_golden_zone(rows=rows, eps=100.0, min_samples=50, n_interp=2)
+        result = run_golden_zone(rows=rows, eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES, n_interp=DBSCAN_N_INTERP)
         if result["status"] != "ok":
             raise HTTPException(
                 status_code=404,
@@ -149,7 +158,69 @@ def get_golden_zone(
     )
 
 
+# ── GET /stats/raw-points/ ───────────────────────────────────────────────────
+
+@router.get(
+    "/raw-points/",
+    response_model=schemas.GoldenZoneResponse,
+    summary="DBSCAN 전 원시 포인트 조회",
+)
+def get_raw_points(
+    campaign_id: uuid.UUID,
+    device_id:   uuid.UUID,
+    start_date: Optional[date] = None,
+    end_date:   Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    query = (
+        db.query(models.EventRaw)
+        .filter(
+            models.EventRaw.campaign_id == campaign_id,
+            models.EventRaw.device_id   == device_id,
+            func.jsonb_array_length(models.EventRaw.look_times) > 0,
+        )
+    )
+    if start_date:
+        start_dt = datetime(start_date.year, start_date.month, start_date.day, tzinfo=KST)
+        query = query.filter(models.EventRaw.ts >= start_dt)
+    if end_date:
+        end_dt = datetime(end_date.year, end_date.month, end_date.day, tzinfo=KST) + timedelta(days=1)
+        query = query.filter(models.EventRaw.ts < end_dt)
+
+    rows = query.all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="해당 조건에 look_times 데이터가 없습니다.")
+
+    pts = build_point_cloud(rows, DBSCAN_N_INTERP)
+    if len(pts) == 0:
+        raise HTTPException(status_code=404, detail="포인트 데이터가 없습니다.")
+
+    return schemas.GoldenZoneResponse(
+        campaign_id = str(campaign_id),
+        device_id   = str(device_id),
+        computed_at = datetime.now(timezone.utc),
+        point_count = int(len(pts)),
+        event_count = len(rows),
+        dbscan      = schemas.DbscanInfo(
+            eps           = 0.0,
+            min_samples   = 0,
+            cluster_count = 1,
+            noise_count   = 0,
+        ),
+        clusters = [
+            schemas.GoldenZoneCluster(label=0, point_count=int(len(pts)), points=pts.tolist())
+        ],
+    )
+
+
 # ── GET /stats/range/ ─────────────────────────────────────────────────────────
+
+_BUCKET_ORDER = [f"{i}~{i+1}s" for i in range(25)] + ["25s+"]
 
 @router.get(
     "/range/",
@@ -165,12 +236,22 @@ def get_range_stats(
     age_group:   Optional[str] = None,
     gender:      Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     if start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date는 end_date보다 클 수 없습니다.")
 
-    if not db.query(models.DeviceCampaign).filter_by(device_id=device_id, campaign_id=campaign_id).first():
-        raise HTTPException(status_code=404, detail="등록되지 않은 device-campaign 조합입니다.")
+    dc = db.query(models.DeviceCampaign).filter_by(device_id=device_id, campaign_id=campaign_id).first()
+    if not dc:
+        raise HTTPException(status_code=404, detail="해당 device_id와 campaign_id 조합이 존재하지 않습니다.")
+    # SOV 
+    if dc.ad_duration_sec and dc.cycle_total_sec and dc.cycle_total_sec > 0:
+        sov = round(dc.ad_duration_sec / dc.cycle_total_sec, 4)
+    else:
+        sov = None
+    campaign = db.query(models.Campaign).filter_by(id=campaign_id).first()
+    if not campaign or campaign.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
 
     # ── DailyAgg 조회 ────────────────────────────────────────────────────────
     daily_query = db.query(models.DailyAgg).filter(
@@ -197,6 +278,13 @@ def get_range_stats(
     attention_rate_times  = round(total_attention / total_dwell, 4)      if total_dwell      > 0 else 0.0
     avg_attention_time_ms = round(total_attention / total_interested, 2) if total_interested > 0 else 0.0
     viewability_score     = round(attention_rate_tracks * avg_attention_time_ms, 4)
+    # ATE (ESOV) 계산
+    if sov and sov > 0:
+        attention_track_efficiency = round(attention_rate_tracks / sov, 4)
+        attention_time_efficiency  = round(attention_rate_times / sov, 4)
+    else :
+        attention_track_efficiency = None
+        attention_time_efficiency  = None
 
     revisit_tracks    = sum(r.revisit_track_count for r in daily_rows)
     total_revisits    = sum(r.total_revisit_look_count for r in daily_rows)
@@ -217,6 +305,15 @@ def get_range_stats(
     count_60s_plus = sum(r.exposure_count for r in daily_rows if r.age_group == "60+")
     count_male     = sum(r.exposure_count for r in daily_rows if r.gender == "male")
     count_female   = sum(r.exposure_count for r in daily_rows if r.gender == "female")
+
+    interested_count_male     = sum(r.interested_count for r in daily_rows if r.gender == "male")
+    interested_count_female   = sum(r.interested_count for r in daily_rows if r.gender == "female")
+    interested_count_10s      = sum(r.interested_count for r in daily_rows if r.age_group == "10-19")
+    interested_count_20s      = sum(r.interested_count for r in daily_rows if r.age_group == "20-29")
+    interested_count_30s      = sum(r.interested_count for r in daily_rows if r.age_group == "30-39")
+    interested_count_40s      = sum(r.interested_count for r in daily_rows if r.age_group == "40-49")
+    interested_count_50s_plus = sum(r.interested_count for r in daily_rows if r.age_group == "50-59")
+    interested_count_60s_plus = sum(r.interested_count for r in daily_rows if r.age_group == "60+")
 
     # ── HourlyAgg 조회 → hourly_trend + peak_hour ────────────────────────────
     hourly_query = db.query(models.HourlyAgg).filter(
@@ -243,11 +340,54 @@ def get_range_stats(
     for r in daily_rows:
         d = str(r.date)
         if d not in date_map:
-            date_map[d] = {"exposure_count": 0, "interested_count": 0}
-        date_map[d]["exposure_count"]  += r.exposure_count
-        date_map[d]["interested_count"] += r.interested_count
+            date_map[d] = {"exposure_count": 0, "interested_count": 0, "total_dwell_ms": 0, "total_attention_ms": 0}
+        date_map[d]["exposure_count"]    += r.exposure_count
+        date_map[d]["interested_count"]  += r.interested_count
+        date_map[d]["total_dwell_ms"]    += r.total_dwell_ms or 0
+        date_map[d]["total_attention_ms"] += r.total_attention_ms or 0
 
-    daily_trend = [{"date": d, **date_map[d]} for d in sorted(date_map.keys())]
+    daily_trend = []
+    for d in sorted(date_map.keys()):
+        day = date_map[d]
+        # 일일 attention_rate 계산
+        day_track_rate = (day["interested_count"] / day["exposure_count"]) if day["exposure_count"] > 0 else 0.0
+        day_time_rate  = (day["total_attention_ms"] / day["total_dwell_ms"]) if day["total_dwell_ms"] > 0 else 0.0
+        if sov and sov > 0:
+            day_track_eff = round(day_track_rate / sov, 4)
+            day_time_eff  = round(day_time_rate / sov, 4)
+        else:
+            day_track_eff = None
+            day_time_eff  = None
+        daily_trend.append({
+            "date" : d,
+            **day,
+            "attention_track_efficiency": day_track_eff,
+            "attention_time_efficiency":  day_time_eff,
+        })
+    # ── DailyDistributionAgg 조회 ─────────────────────────────────────────────
+    dist_query = db.query(models.DailyDistributionAgg).filter(
+        models.DailyDistributionAgg.device_id   == device_id,
+        models.DailyDistributionAgg.campaign_id == campaign_id,
+        models.DailyDistributionAgg.date >= start_date,
+        models.DailyDistributionAgg.date <= end_date,
+    )
+    if age_group:
+        dist_query = dist_query.filter(models.DailyDistributionAgg.age_group == age_group)
+    if gender:
+        dist_query = dist_query.filter(models.DailyDistributionAgg.gender == gender)
+
+    bucket_map: dict[str, dict] = {}
+    for row in dist_query.all():
+        if row.bucket not in bucket_map:
+            bucket_map[row.bucket] = {"dwell_count": 0, "fixation_count": 0}
+        bucket_map[row.bucket]["dwell_count"]    += row.dwell_count
+        bucket_map[row.bucket]["fixation_count"] += row.fixation_count
+
+    distribution = [
+        schemas.DistributionBucket(bucket=b, **bucket_map[b])
+        for b in _BUCKET_ORDER
+        if b in bucket_map
+    ]
 
     return {
         "start_date":  str(start_date),
@@ -268,6 +408,14 @@ def get_range_stats(
         "count_60s_plus": count_60s_plus,
         "count_male":     count_male,
         "count_female":   count_female,
+        "interested_count_male":     interested_count_male,
+        "interested_count_female":   interested_count_female,
+        "interested_count_10s":      interested_count_10s,
+        "interested_count_20s":      interested_count_20s,
+        "interested_count_30s":      interested_count_30s,
+        "interested_count_40s":      interested_count_40s,
+        "interested_count_50s_plus": interested_count_50s_plus,
+        "interested_count_60s_plus": interested_count_60s_plus,
         "avg_revisit_count":       avg_revisit_count,
         "avg_fixation_latency_ms": avg_fixation_latency_ms,
         "viewability_score":       viewability_score,
@@ -276,4 +424,8 @@ def get_range_stats(
         "target_match_rate":       target_match_rate,
         "hourly_trend": hourly_trend,
         "daily_trend":  daily_trend,
+        "distribution": distribution,
+        "sov": sov,
+        "attention_track_efficiency": attention_track_efficiency,
+        "attention_time_efficiency":  attention_time_efficiency,
     }

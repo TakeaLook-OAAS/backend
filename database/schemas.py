@@ -1,7 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict, computed_field
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, ConfigDict, computed_field, field_validator
+from pydantic import EmailStr
 
 
 # ── AI팀 JSON 내부 구조 ──────────────────────────────────────────────────────
@@ -204,7 +205,9 @@ class CampaignAggResponse(AggBase):
     avg_attention_time_ms:   float
     peak_hour:               Optional[int]
     target_match_rate:       Optional[float]
-
+    sov:                     Optional[float] # sov
+    attention_track_efficiency: Optional[float] # 사람 수 기준 점유율 대비 효율
+    attention_time_efficiency:  Optional[float] # 시간 기준 점유율 대비 효율
     @field_validator("device_id", "campaign_id", mode="before")
     @classmethod
     def uuid_to_str(cls, v):
@@ -214,6 +217,56 @@ class CampaignAggResponse(AggBase):
 class CampaignAggListResponse(BaseModel):
     results: List[CampaignAggResponse]
     total:   int
+
+
+# ── 광고 신청 (Apply) ──────────────────────────────────────────────────────────
+
+class SlotItemSchema(BaseModel):
+    length: Optional[int] = None
+    mine: bool
+
+class SlotConfigSchema(BaseModel):
+    adLength: Optional[int] = None
+    slots: List[SlotItemSchema]
+
+class AddressItemSchema(BaseModel):
+    addr: str
+    label: str
+
+class ApplicationCreate(BaseModel):
+    brand:        str
+    company:      str
+    category:     str
+    start_date:   date
+    end_date:     date
+    start_time:   str        # "HH:MM"
+    end_time:     str        # "HH:MM"
+    slot_configs: List[SlotConfigSchema]
+    placement:    str
+    addresses:    List[AddressItemSchema]
+    age:          str        # 단일 값 (예: "20-29") 또는 "all"
+    gender:       str        # "all" | "m" | "f"
+    name:         str
+    phone:        str
+    email:        str
+
+class ApplicationResponse(BaseModel):
+    id:         str
+    name:       str
+    status:     str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def enum_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v
 
 
 class DbscanInfo(BaseModel):
@@ -292,6 +345,22 @@ class DailyTrend(BaseModel):
     date:             str
     exposure_count:   int
     interested_count: int
+    total_dwell_ms:   int
+    total_attention_ms: int
+    attention_track_efficiency : Optional[float] = None
+    attention_time_efficiency:  Optional[float] = None
+
+
+# ── GET /stats/distribution/ 응답 ────────────────────────────────────────────
+
+class DistributionBucket(BaseModel):
+    bucket:         str
+    dwell_count:    int
+    fixation_count: int
+
+
+class DistributionResponse(BaseModel):
+    buckets: List[DistributionBucket]
 
 
 # ── GET /campaigns/ 응답 ─────────────────────────────────────────────────────
@@ -339,12 +408,46 @@ class CampaignListResponse(BaseModel):
     results: List[CampaignWithDevices]
     total:   int
 
+# ── 메인 페이지 지도 (기기 단위) ──────────────────────────────────────────────
+
+class DeviceMapMarker(BaseModel):
+    """
+    메인 페이지 지도에 찍을 마커 1개 = 기기 1개.
+    광고주가 신청서에서 이 기기의 주소를 선택(입력)한 적이 있는 기기만 대상.
+
+    status:
+      - "active"  (초록) — 이 기기에 연결된 캠페인 중 RUNNING 상태가 하나라도 있음
+      - "pending" (노랑) — 신청은 됐지만 아직 RUNNING인 캠페인이 없음 (심사중/일시정지 등)
+    """
+    device_id: str
+    name:      str
+    address:   str
+    latitude:  float
+    longitude: float
+    status:    Literal["active", "pending"]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DeviceMapResponse(BaseModel):
+    markers: List[DeviceMapMarker]
+
 
 class RangeStatsResponse(AggBase):
     start_date:  str
     end_date:    str
     device_id:   str
     campaign_id: str
+
+    # 관심 인구 성별·연령 분포
+    interested_count_male:     int
+    interested_count_female:   int
+    interested_count_10s:      int
+    interested_count_20s:      int
+    interested_count_30s:      int
+    interested_count_40s:      int
+    interested_count_50s_plus: int
+    interested_count_60s_plus: int
 
     # 고급 지표
     avg_revisit_count:       float
@@ -353,10 +456,14 @@ class RangeStatsResponse(AggBase):
     avg_attention_time_ms:   float
     peak_hour:               Optional[int]
     target_match_rate:       Optional[float]
+    sov :                     Optional[float]
+    attention_track_efficiency : Optional[float] = None
+    attention_time_efficiency  : Optional[float] = None
 
     # 추이
     hourly_trend: List[HourlyTrend]
     daily_trend:  List[DailyTrend]
+    distribution: List[DistributionBucket]
 
 class CampaignCreate(BaseModel):
     name:             str
@@ -364,3 +471,58 @@ class CampaignCreate(BaseModel):
     end_date:         date
     target_age_group: Optional[str] = None
     target_gender:    Optional[str] = None
+
+
+
+
+# ── 설정 변경 요청 ─────────────────────────────────────────────────────────────
+
+class ChangeRequestCreate(BaseModel):
+    campaign_id:      str
+    target_gender:    Optional[Literal["male", "female"]] = None
+    target_age_group: Optional[Literal["10-19", "20-29", "30-39", "40-49", "50-59", "60+"]] = None
+    start_date:       Optional[date] = None
+    end_date:         Optional[date] = None
+    broadcast_start:  Optional[str] = None
+    broadcast_end:    Optional[str] = None
+    reason:           Optional[str] = None
+
+
+class ChangeRequestResponse(BaseModel):
+    id:              str
+    campaign_id:     str
+    campaign_name:   str
+    status:          str
+    target_gender:   Optional[str]
+    target_age_group: Optional[str]
+    start_date:      Optional[date]
+    end_date:        Optional[date]
+    broadcast_start: Optional[str]
+    broadcast_end:   Optional[str]
+    reason:          Optional[str]
+    created_at:      datetime
+    reviewed_at:     Optional[datetime]
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("id", "campaign_id", mode="before")
+    @classmethod
+    def uuid_to_str(cls, v):
+        return str(v)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def enum_to_str(cls, v):
+        return v.value if hasattr(v, "value") else v
+
+
+class ChangeRequestListResponse(BaseModel):
+    results: List[ChangeRequestResponse]
+    total:   int
+
+# ── 이메일 형식 검증 ─────────────────────────────────────────────────────────────
+
+class InquiryCreate(BaseModel):
+    name:    str = Field(..., min_length=1, max_length=30)
+    email:   EmailStr
+    content: str = Field(..., min_length=1, max_length=2000)

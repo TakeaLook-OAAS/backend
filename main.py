@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from api.v1.endpoints import events, stats, auth, admin, campaigns
+from api.v1.endpoints import events, stats, auth, admin, campaigns, applications, change_requests, inquiries
 from database.database import get_db, create_tables
 from contextlib import asynccontextmanager
 from api.v1.endpoints import export
@@ -46,7 +46,10 @@ app.include_router(events.router,      prefix="/events",      tags=["events"])
 app.include_router(stats.router,       prefix="/stats",       tags=["stats"])
 app.include_router(export.router,      prefix="/export",      tags=["export"])
 app.include_router(admin.router,       prefix="/admin",       tags=["admin"])
-app.include_router(campaigns.router,   prefix="/campaigns",   tags=["campaigns"])
+app.include_router(campaigns.router,        prefix="/campaigns",        tags=["campaigns"])
+app.include_router(applications.router,     prefix="/applications",     tags=["applications"])
+app.include_router(change_requests.router,  prefix="/change-requests",  tags=["change-requests"])
+app.include_router(inquiries.router,       prefix="/inquiries",       tags=["inquiries"])
 
 # ── 헬스체크 ──────────────────────────────────────────────────────────────────
 

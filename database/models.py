@@ -13,7 +13,7 @@ from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKe
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from database.enums import DeviceStatus, CampaignStatus, UserRole
+from database.enums import DeviceStatus, CampaignStatus, UserRole, ChangeRequestStatus
 
 Base = declarative_base()
 
@@ -59,6 +59,9 @@ class Device(Base):
     name       = Column(String(20), nullable=False, unique=True)
     status     = Column(Enum(DeviceStatus), nullable=False, default=DeviceStatus.ENABLE)
     timezone   = Column(String(32), nullable=False)
+    address    = Column(String(255), nullable=True)    # 지도 표시용 주소
+    latitude   = Column(Float, nullable=True)          # address 지오코딩 결과 (위도)
+    longitude  = Column(Float, nullable=True)          # address 지오코딩 결과 (경도)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     events           = relationship("EventRaw", back_populates="device")
@@ -87,6 +90,19 @@ class Campaign(Base):
     target_age_group = Column(String(20), nullable=True)   # 예: "20-29"
     target_gender    = Column(String(10), nullable=True)   # "male" / "female"
 
+    # Apply 폼 전용 컬럼 (nullable — admin이 직접 생성한 캠페인에는 없음)
+    brand         = Column(String(40),   nullable=True)
+    company       = Column(String(60),   nullable=True)
+    category      = Column(String(20),   nullable=True)
+    placement     = Column(String(10),   nullable=True)   # "indoor" | "outdoor"
+    start_time    = Column(String(5),    nullable=True)   # "HH:MM"
+    end_time      = Column(String(5),    nullable=True)   # "HH:MM"
+    slot_configs  = Column(JSONB,        nullable=True)   # [{adLength, slots:[{length,mine}]}]
+    addresses     = Column(JSONB,        nullable=True)   # [{addr, label}]
+    contact_name  = Column(String(30),   nullable=True)
+    contact_phone = Column(String(30),   nullable=True)
+    contact_email = Column(String(255),  nullable=True)
+
     __table_args__ = (
         CheckConstraint("status IN ('DRAFT', 'RUNNING', 'PAUSED', 'ENDED')", name="chk_campaign_status"),
         CheckConstraint("end_date >= start_date", name="chk_campaign_dates"),
@@ -97,6 +113,10 @@ class Campaign(Base):
         CheckConstraint(
             "target_gender IN ('male', 'female') OR target_gender IS NULL",
             name="chk_campaign_target_gender"
+        ),
+        CheckConstraint(
+            "placement IN ('indoor', 'outdoor') OR placement IS NULL",
+            name="chk_campaign_placement"
         ),
     )
 
@@ -115,6 +135,10 @@ class DeviceCampaign(Base):
     campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
     cycle_index = Column(Integer, nullable=False)
     created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    # SOV
+    ad_duration_sec = Column(Integer, nullable=True)  # 이 기기에서 내 광고 1회 재생 길이(초)
+    cycle_total_sec = Column(Integer, nullable=True)  # 이 기기 한 사이클 총 길이(초)
 
     __table_args__ = (
         UniqueConstraint("device_id", "cycle_index", name="uq_device_cycle"),
@@ -239,9 +263,12 @@ class AggMixin:
     avg_revisit_count       = Column(Float,   nullable=False, default=0.0)
     avg_fixation_latency_ms = Column(Float,   nullable=True)
     viewability_score       = Column(Float,   nullable=False, default=0.0)
-    avg_attention_time_ms   = Column(Float,   nullable=False, default=0.0)  # 추가
+    avg_attention_time_ms   = Column(Float,   nullable=False, default=0.0)
     peak_hour               = Column(Integer, nullable=True)
     target_match_rate       = Column(Float,   nullable=True)
+    sov                     = Column(Float,   nullable=True) # sov
+    attention_track_efficiency = Column(Float,   nullable=True) # 사람 수 기준 점유율 대비 효율
+    attention_time_efficiency  = Column(Float,   nullable=True) # 시간 기준 점유율 대비 효율
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
@@ -303,6 +330,31 @@ class DailyAgg(Base):
     campaign = relationship("Campaign")
 
 
+# 6-1. 일별 노출·주목 시간 분포 집계 (히스토그램 버킷)
+class DailyDistributionAgg(Base):
+    __tablename__ = "daily_distribution_aggs"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    date        = Column(Date, nullable=False)
+    device_id   = Column(UUID(as_uuid=True), ForeignKey("devices.id",   ondelete="CASCADE"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    age_group   = Column(String(20), nullable=True)
+    gender      = Column(String(10), nullable=True)
+    bucket      = Column(String(10), nullable=False)  # e.g. "0~1s", "1~2s", ..., "25s+"
+
+    dwell_count    = Column(Integer, nullable=False, default=0)
+    fixation_count = Column(Integer, nullable=False, default=0)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("date", "device_id", "campaign_id", "age_group", "gender", "bucket", name="uq_daily_dist_agg"),
+    )
+    device   = relationship("Device")
+    campaign = relationship("Campaign")
+
+
 # 7. 캠페인 전체 기간 기본 집계
 class CampaignAgg(AggMixin, Base):
     __tablename__ = "campaign_aggs"
@@ -316,4 +368,26 @@ class CampaignAgg(AggMixin, Base):
     )
 
     device   = relationship("Device")
+    campaign = relationship("Campaign")
+
+
+# 8. 설정 변경 요청
+class ChangeRequest(Base):
+    __tablename__ = "change_requests"
+
+    id          = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id", ondelete="CASCADE"), nullable=False)
+    status      = Column(Enum(ChangeRequestStatus), nullable=False, default=ChangeRequestStatus.PENDING)
+
+    target_gender    = Column(String(10),  nullable=True)
+    target_age_group = Column(String(20),  nullable=True)
+    start_date       = Column(Date,        nullable=True)
+    end_date         = Column(Date,        nullable=True)
+    broadcast_start  = Column(String(5),   nullable=True)  # "HH:MM"
+    broadcast_end    = Column(String(5),   nullable=True)  # "HH:MM"
+    reason           = Column(String(500), nullable=True)
+
+    created_at  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
     campaign = relationship("Campaign")

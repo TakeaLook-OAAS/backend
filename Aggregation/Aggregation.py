@@ -2,9 +2,10 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from database.models import EventRaw, CampaignAgg, DailyAgg, HourlyAgg
+from database.models import EventRaw, CampaignAgg, DailyAgg, HourlyAgg, DailyDistributionAgg, DeviceCampaign
 from Aggregation.golden_zone import run_golden_zone, save_golden_zone
 from Aggregation.aggregation_helpers import _build_agg_counts, _build_advanced_agg_counts
+from Aggregation.constants import DBSCAN_EPS, DBSCAN_MIN_SAMPLES, DBSCAN_N_INTERP
 import database.models as models
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,53 @@ def run_daily_aggregation(
                 **counts,
             ))
 
+    # ── DailyDistributionAgg ─────────────────────────────────────────────────
+    BIN_SIZE_MS = 1000
+    MAX_BINS    = 25
+
+    def _bucket_label(ms: int) -> str:
+        i = min(ms // BIN_SIZE_MS, MAX_BINS)
+        return f"{MAX_BINS}s+" if i >= MAX_BINS else f"{i}~{i + 1}s"
+
+    dist_groups: dict[tuple, dict] = {}
+    for row in rows:
+        key = (row.device_id, row.campaign_id, row.age_group, row.gender)
+
+        dwell_bucket = _bucket_label(row.exposure_ms)
+        k = key + (dwell_bucket,)
+        if k not in dist_groups:
+            dist_groups[k] = {"dwell_count": 0, "fixation_count": 0}
+        dist_groups[k]["dwell_count"] += 1
+
+        if row.look_times:
+            fix_ms = row.look_times[0]["start_ms"] - row.exposure_start_ms
+            if fix_ms >= 0:
+                fix_bucket = _bucket_label(fix_ms)
+                k2 = key + (fix_bucket,)
+                if k2 not in dist_groups:
+                    dist_groups[k2] = {"dwell_count": 0, "fixation_count": 0}
+                dist_groups[k2]["fixation_count"] += 1
+
+    for (dev_id, camp_id, age_grp, gender, bucket), counts in dist_groups.items():
+        existing = db.query(DailyDistributionAgg).filter(
+            DailyDistributionAgg.date        == target_date,
+            DailyDistributionAgg.device_id   == dev_id,
+            DailyDistributionAgg.campaign_id == camp_id,
+            _null_safe_filter(DailyDistributionAgg.age_group, age_grp),
+            _null_safe_filter(DailyDistributionAgg.gender,    gender),
+            DailyDistributionAgg.bucket      == bucket,
+        ).first()
+
+        if existing:
+            existing.dwell_count    = counts["dwell_count"]
+            existing.fixation_count = counts["fixation_count"]
+        else:
+            db.add(DailyDistributionAgg(
+                date=target_date, device_id=dev_id, campaign_id=camp_id,
+                age_group=age_grp, gender=gender, bucket=bucket,
+                **counts,
+            ))
+
     db.commit()
     logger.info(f"[DailyAgg] 집계 완료 | date={target_date} | 그룹 수={len(groups)}")
 
@@ -170,6 +218,26 @@ def run_campaign_aggregation(db: Session, campaign_id=None) -> None:
             **_build_agg_counts(group_rows),
             **_build_advanced_agg_counts(group_rows, campaign),
         }
+
+        # SOV
+        dc = db.query(DeviceCampaign).filter_by(
+            device_id=dev_id, campaign_id=camp_id
+        ).first()
+        if dc and dc.ad_duration_sec and dc.cycle_total_sec and dc.cycle_total_sec > 0:
+            all_counts["sov"] = round(dc.ad_duration_sec / dc.cycle_total_sec, 4)
+        else:
+            all_counts["sov"] = None
+        # ---
+
+        # 점유율 대비 효율
+        sov = all_counts["sov"]
+        if sov and sov > 0: # sov가 0보다 크고 None이 아니라면
+            all_counts["attention_track_efficiency"] = round(all_counts["attention_rate_tracks"] / sov, 4)
+            all_counts["attention_time_efficiency"]  = round(all_counts["attention_rate_times"] / sov, 4)
+        else:
+            all_counts["attention_track_efficiency"] = None
+            all_counts["attention_time_efficiency"]  = None
+        # ---
 
         existing = db.query(CampaignAgg).filter_by(device_id=dev_id, campaign_id=camp_id).first()
         if existing:
@@ -209,12 +277,12 @@ def run_dbscan_aggregation(db: Session) -> None:
             )
             .all()
         )
-        result = run_golden_zone(rows=rows, eps=100.0, min_samples=10, n_interp=5)
+        result = run_golden_zone(rows=rows, eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES, n_interp=DBSCAN_N_INTERP)
 
         if result["status"] == "ok":
             save_golden_zone(
                 result=result, campaign_id=camp_id, device_id=dev_id,
-                eps=100.0, min_samples=10, n_interp=5, db=db,
+                eps=DBSCAN_EPS, min_samples=DBSCAN_MIN_SAMPLES, n_interp=DBSCAN_N_INTERP, db=db,
             )
             logger.info(f"[DbscanAgg] 저장 완료 | device={dev_id} | campaign={camp_id}")
         else:
