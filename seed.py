@@ -20,6 +20,9 @@ ADMIN_EMAIL    = "teamtakealook@naver.com"
 ADMIN_PASSWORD = "takealook"
 USER_EMAIL     = "usertakealook@naver.com"
 USER_PASSWORD  = "takealook"
+DEVICE_ADDRESS = "서울특별시 종로구 홍지문2길 20"
+DEVICE_LAT     = 37.6026
+DEVICE_LNG     = 126.9553
 
 
 def seed():
@@ -57,6 +60,9 @@ def seed():
             name="상명대학교 공학관 G203",
             status=DeviceStatus.ENABLE,
             timezone="Asia/Seoul",
+            address=DEVICE_ADDRESS,
+            latitude=DEVICE_LAT,
+            longitude=DEVICE_LNG,
         )
         db.add(device)
 
@@ -68,6 +74,11 @@ def seed():
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
             status=CampaignStatus.RUNNING,
+            addresses=[{
+                "addr": DEVICE_ADDRESS,
+                "label": "상명대학교 공학관 G203",
+                "device_id": str(DEVICE_ID),
+            }],
         )
         db.add(campaign)
 
