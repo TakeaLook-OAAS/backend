@@ -54,7 +54,7 @@ def seed():
         # 2. 디바이스
         device = Device(
             id=DEVICE_ID,
-            name="device-001",
+            name="상명대학교 공학관 G203",
             status=DeviceStatus.ENABLE,
             timezone="Asia/Seoul",
         )
@@ -64,7 +64,7 @@ def seed():
         campaign = Campaign(
             id=CAMPAIGN_ID,
             user_id=ADMIN_ID,
-            name="테스트 캠페인",
+            name="졸업전시",
             start_date=date(2026, 1, 1),
             end_date=date(2026, 12, 31),
             status=CampaignStatus.RUNNING,
